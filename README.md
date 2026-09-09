@@ -33,9 +33,9 @@ python3 bin/build_all.py
 
 两种 `struct_type`：
 
-**tree** —— 每步是完整树快照 + 高亮
+**tree** —— 每步是完整树快照 + 高亮。`children` 位置 0=左子、1=右子，单右子用 `null` 占位
 ```json
-{ "id": "n7", "val": 7, "children": [{"id": "n3", "val": 3}] }
+{ "id": "n3", "val": 3, "children": [null, {"id": "n5", "val": 5}] }
 ```
 
 **fsm** —— 全局状态/转移定义一次，每步标记 active 状态 + 最近转移

@@ -14,7 +14,12 @@ FSM_TYPES = {'start', 'active', 'success', 'failure', 'terminal'}
 
 def _walk_tree_ids(node, acc):
     acc.add(node['id'])
-    for c in node.get('children', []):
+    kids = node.get('children', [])
+    assert isinstance(kids, list) and len(kids) <= 2, \
+        f"node '{node['id']}': children must be a list of at most 2 (position 0=left, 1=right, null as placeholder)"
+    for c in kids:
+        if c is None:
+            continue
         _walk_tree_ids(c, acc)
 
 

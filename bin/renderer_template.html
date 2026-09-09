@@ -314,23 +314,33 @@ function computeTreeLayout(root, w, h) {
   const insetL = 60, insetR = 60, topPad = 70, bottomPad = 100;
   const availW = Math.max(100, w - insetL - insetR);
   const availH = Math.max(120, h - topPad - bottomPad);
-  // 自底向上分配槽位：叶子依次 0,1,2...；内部节点 = 首末子节点槽位中点
+  // 自底向上分配槽位：叶子依次 0,1,2...；内部节点 = 首末子节点槽位中点；
+  // 单子按方向偏移（children 位置 0=左 1=右，右子单孩子用 null 占位）
   const slot = {}, depth = {};
   let nextSlot = 0, maxDepth = 0;
+  const OFF = 0.6; // 单子方向偏移（槽位单位）
   (function walk(n, d) {
     if (!n) return;
     depth[n.id] = d;
     if (d > maxDepth) maxDepth = d;
-    const kids = (n.children || []).filter(Boolean);
+    const raw = n.children || [];
+    const kids = raw.filter(Boolean);
     if (!kids.length) {
       slot[n.id] = nextSlot++;
       return;
     }
     kids.forEach(c => walk(c, d + 1));
-    slot[n.id] = (slot[kids[0].id] + slot[kids[kids.length - 1].id]) / 2;
+    if (kids.length === 1) {
+      const isLeft = raw.indexOf(kids[0]) === 0;
+      slot[n.id] = slot[kids[0].id] + (isLeft ? OFF : -OFF);
+    } else {
+      slot[n.id] = (slot[kids[0].id] + slot[kids[kids.length - 1].id]) / 2;
+    }
   })(root, 0);
   // 槽位间距：撑满可用宽度，但小树不过度拉伸（上限 150px）
-  const spanX = Math.max(0, nextSlot - 1);
+  const slotVals = Object.values(slot);
+  const minS = Math.min.apply(null, slotVals), maxS = Math.max.apply(null, slotVals);
+  const spanX = Math.max(0, maxS - minS);
   const sx = spanX === 0 ? 150 : Math.min(availW / spanX, 150);
   const x0 = insetL + (availW - spanX * sx) / 2;
   // 半径随间距缩放，保证相邻节点不重叠
@@ -343,13 +353,25 @@ function computeTreeLayout(root, w, h) {
     if (!n) return;
     nodes.push({
       id: n.id, val: n.val,
-      x: x0 + slot[n.id] * sx,
+      x: x0 + (slot[n.id] - minS) * sx,
       y: y0 + depth[n.id] * layerGap,
       r: r,
       children: (n.children || []).filter(Boolean).map(c => c.id),
     });
     (n.children || []).forEach(collect);
   })(root);
+  // 同层最小水平间距保护：偏移累积导致不足时缩小半径防重叠
+  const byLevel = {};
+  nodes.forEach(nd => (byLevel[depth[nd.id]] = byLevel[depth[nd.id]] || []).push(nd.x));
+  let minGap = Infinity;
+  Object.values(byLevel).forEach(xs => {
+    xs.sort((a, b) => a - b);
+    for (let i = 1; i < xs.length; i++) minGap = Math.min(minGap, xs[i] - xs[i - 1]);
+  });
+  if (isFinite(minGap) && minGap < 2 * r + 8) {
+    const rr = Math.max(8, (minGap - 8) / 2);
+    nodes.forEach(nd => { nd.r = rr; });
+  }
   return { nodes, layerGap, r };
 }
 
