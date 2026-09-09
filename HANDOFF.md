@@ -39,7 +39,7 @@
 | fsm | ✅ MVP 已实现 |
 | array | ✅ 已实现（折半查找/冒泡排序，含 swap 双弧交叉动画） |
 | timeline | ✅ 已实现（SJF vs FCFS 进程调度甘特，含游标动画/进程分色） |
-| graph | ⏳ 待做（路由/最短路） |
+| graph | ✅ 已实现（Dijkstra vs Prim，含 dist 徽章/松弛树边语义色） |
 | grid | ⏳ 待做（加法器/Cache/子网） |
 
 ---
@@ -183,6 +183,37 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 - 时间轴刻度自动生成（maxT≤20 → 步长 1，≤40 → 2，≤100 → 5 …）
 - 校验：row 引用、active 引用、bar 重叠、reveal/markers 范围；schema 见 `schemas/timeline.schema.json`
 - 实现要点：`S.nowT = {t, tt}` 插值（draw 主循环里 `+= (tt-t)*0.15`）；loadPreset 重置 `S.nowT=null` 并同步 `presetSelect.value`（URL `preset=N` 参数此前不同步下拉框，已修）
+
+### graph（2026-09-09 新增）
+
+带权图（Dijkstra/Prim/BFS/DFS/拓扑排序）。**nodes/edges 全局定义**，每步只标记状态；同图不同算法用不同 preset（示例即 Dijkstra vs Prim 对比）：
+
+```json
+{
+  "schema_version": 1,
+  "struct_type": "graph",
+  "directed": false,
+  "meta": { "title": "...", "caption": "..." },
+  "nodes": [{ "id": "v0", "label": "v0", "x": 10, "y": 50 }],
+  "edges": [{ "id": "e01", "from": "v0", "to": "v1", "weight": 10 }],
+  "presets": [{
+    "name": "Dijkstra 从 v0 出发",
+    "steps": [{
+      "hl": [{ "node_id": "v0", "kind": "done" }],
+      "edge_hl": [{ "edge_id": "e01", "kind": "tree" }],
+      "vals": [{ "node_id": "v1", "val": "10" }],
+      "title": "...", "desc": "..."
+    }]
+  }]
+}
+```
+
+- 节点 kind：`visit`（当前，蓝脉冲）/ `frontier`（已发现，琥珀）/ `done`（已确定，绿）/ `path`（路径，紫）/ `found`（命中）
+- 边 kind：`relax`（松弛中，琥珀粗线）/ `tree`（树边，绿粗线）/ `path`（路径边，紫粗线）
+- `vals`：节点下方数值徽章（dist/深度/序号，字符串支持 `∞`）——Dijkstra 的 dist 演化核心载体
+- 布局：x/y 0-100 归一化坐标（全部节点都提供才生效，还原教材图版式），否则圆形自动布局；`directed: true` 时边带箭头
+- 校验：节点/边 id 唯一、from/to/hl/edge_hl/vals 引用、weight 非负；schema 见 `schemas/graph.schema.json`
+- 实现要点：drawArrowHead/drawEdgeLabel 已泛化为显式 color 参数（fsm 与 graph 共用）；权重标签非高亮时降为灰色（#868e96）减少完成态噪音
 
 ---
 
@@ -349,10 +380,14 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 3. ✅ FSM 视觉迭代（回环弧线部分缓解垂直空间问题，暂不再处理）
 4. ✅ 加 array 渲染器（2026-09-09 完成：折半查找 + 冒泡排序示例，含 swap 双弧交叉动画，见第三节 array 规范）
 5. ✅ 加 timeline 渲染器（2026-09-09 完成：SJF vs FCFS 进程调度甘特，含游标动画/进程分色/到达标记，见第三节 timeline 规范）
-6. **加 graph 渲染器**（路由/最短路，约 200 行）
+6. ✅ 加 graph 渲染器（2026-09-09 完成：Dijkstra vs Prim，含 dist 徽章/松弛树边语义色/可选有向，见第三节 graph 规范）
 7. **加 grid 渲染器**（加法器/Cache/子网，约 250 行）
 8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次；IR 规范文档 `schemas/README.md` 已备好可直接入提示词）
 9. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
+
+### ⚠️ 教训：全量回归必须跑（2026-09-09 graph 轮发现）
+
+array 轮（a1d2297）编辑 applyStep 时**误删了 fsm 分支的 S.hl/S.lastTrans 赋值**（3 行），counter-2bit 从该 commit 起每帧 TypeError、画布冻结。array/timeline 两轮验证都只测了新示例，未跑 fsm/tree 回归，导致坏代码已推送到远程。graph 轮跑全量回归（`regress2.py` 模式：6 个示例 × 全 preset × 全步骤）才暴露。**此后每次改 renderer_template.html 都必须跑全量回归**（脚本模式：goto → loadPreset 循环 → applyStep 循环 → 收集 pageerror/console error）。
 
 ---
 

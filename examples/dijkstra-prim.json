@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "struct_type": "graph",
+  "directed": false,
+  "meta": {
+    "title": "Dijkstra 最短路 vs Prim 最小生成树",
+    "caption": "同一张带权无向图，两种贪心策略的对比"
+  },
+  "nodes": [
+    { "id": "v0", "label": "v0", "x": 10, "y": 50 },
+    { "id": "v1", "label": "v1", "x": 38, "y": 10 },
+    { "id": "v3", "label": "v3", "x": 38, "y": 90 },
+    { "id": "v2", "label": "v2", "x": 66, "y": 50 },
+    { "id": "v4", "label": "v4", "x": 90, "y": 66 }
+  ],
+  "edges": [
+    { "id": "e01", "from": "v0", "to": "v1", "weight": 10 },
+    { "id": "e03", "from": "v0", "to": "v3", "weight": 30 },
+    { "id": "e12", "from": "v1", "to": "v2", "weight": 50 },
+    { "id": "e32", "from": "v3", "to": "v2", "weight": 20 },
+    { "id": "e34", "from": "v3", "to": "v4", "weight": 60 },
+    { "id": "e24", "from": "v2", "to": "v4", "weight": 10 }
+  ],
+  "presets": [
+    {
+      "name": "Dijkstra 从 v0 出发",
+      "steps": [
+        {
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "∞" },
+            { "node_id": "v2", "val": "∞" },
+            { "node_id": "v3", "val": "∞" },
+            { "node_id": "v4", "val": "∞" }
+          ],
+          "title": "初始化",
+          "desc": "dist[v0]=0（源点），其余为 `∞`。每轮从未确定顶点中选 dist 最小者"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "frontier" },
+            { "node_id": "v3", "kind": "frontier" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" }
+          ],
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "10" },
+            { "node_id": "v2", "val": "∞" },
+            { "node_id": "v3", "val": "30" },
+            { "node_id": "v4", "val": "∞" }
+          ],
+          "title": "第 1 轮：确定 v0",
+          "desc": "选 `v0`（dist=0）。松弛邻边：dist[v1]=0+10=10，dist[v3]=0+30=30"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "visit" },
+            { "node_id": "v3", "kind": "frontier" },
+            { "node_id": "v2", "kind": "frontier" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e12", "kind": "relax" }
+          ],
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "10" },
+            { "node_id": "v2", "val": "60" },
+            { "node_id": "v3", "val": "30" },
+            { "node_id": "v4", "val": "∞" }
+          ],
+          "title": "第 2 轮：确定 v1",
+          "desc": "选 `v1`（dist=10 最小）。松弛 v1-v2：dist[v2]=10+50=60"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "visit" },
+            { "node_id": "v2", "kind": "frontier" },
+            { "node_id": "v4", "kind": "frontier" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e32", "kind": "relax" },
+            { "edge_id": "e34", "kind": "relax" }
+          ],
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "10" },
+            { "node_id": "v2", "val": "50" },
+            { "node_id": "v3", "val": "30" },
+            { "node_id": "v4", "val": "90" }
+          ],
+          "title": "第 3 轮：确定 v3",
+          "desc": "选 `v3`（dist=30）。松弛 v3-v2：30+20=50 < 60，更新 dist[v2]=50；松弛 v3-v4：30+60=90，dist[v4]=90"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "done" },
+            { "node_id": "v2", "kind": "visit" },
+            { "node_id": "v4", "kind": "frontier" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e32", "kind": "tree" },
+            { "edge_id": "e24", "kind": "relax" }
+          ],
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "10" },
+            { "node_id": "v2", "val": "50" },
+            { "node_id": "v3", "val": "30" },
+            { "node_id": "v4", "val": "60" }
+          ],
+          "title": "第 4 轮：确定 v2",
+          "desc": "选 `v2`（dist=50）。松弛 v2-v4：50+10=60 < 90，更新 dist[v4]=60"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "done" },
+            { "node_id": "v2", "kind": "done" },
+            { "node_id": "v4", "kind": "visit" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e32", "kind": "tree" },
+            { "edge_id": "e24", "kind": "tree" }
+          ],
+          "vals": [
+            { "node_id": "v0", "val": "0" },
+            { "node_id": "v1", "val": "10" },
+            { "node_id": "v2", "val": "50" },
+            { "node_id": "v3", "val": "30" },
+            { "node_id": "v4", "val": "60" }
+          ],
+          "title": "算法结束",
+          "desc": "最后确定 `v4`（dist=60）。最短路径树：v0-v1(10)、v0-v3(30)、v3-v2(50)、v2-v4(60)"
+        }
+      ]
+    },
+    {
+      "name": "Prim 最小生成树",
+      "steps": [
+        {
+          "hl": [{ "node_id": "v0", "kind": "visit" }],
+          "title": "初始：树 = {v0}",
+          "desc": "Prim 从任一顶点（v0）开始，每次选连接树内与树外的最小权边"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "visit" }
+          ],
+          "edge_hl": [{ "edge_id": "e01", "kind": "tree" }],
+          "title": "第 1 步：加入 v1",
+          "desc": "候选边：v0-v1(10)、v0-v3(30)，最小为 `v0-v1:10`，v1 入树"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "visit" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" }
+          ],
+          "title": "第 2 步：加入 v3",
+          "desc": "候选边：v0-v3(30)、v1-v2(50)，最小为 `v0-v3:30`，v3 入树"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "done" },
+            { "node_id": "v2", "kind": "visit" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e32", "kind": "tree" }
+          ],
+          "title": "第 3 步：加入 v2",
+          "desc": "候选边：v3-v2(20)、v1-v2(50)、v3-v4(60)，最小为 `v3-v2:20`，v2 入树"
+        },
+        {
+          "hl": [
+            { "node_id": "v0", "kind": "done" },
+            { "node_id": "v1", "kind": "done" },
+            { "node_id": "v3", "kind": "done" },
+            { "node_id": "v2", "kind": "done" },
+            { "node_id": "v4", "kind": "visit" }
+          ],
+          "edge_hl": [
+            { "edge_id": "e01", "kind": "tree" },
+            { "edge_id": "e03", "kind": "tree" },
+            { "edge_id": "e32", "kind": "tree" },
+            { "edge_id": "e24", "kind": "tree" }
+          ],
+          "title": "MST 完成",
+          "desc": "候选边：v2-v4(10)、v3-v4(60)，选 `v2-v4:10`。MST = {10, 30, 20, 10}，权值和 `70`。注意对比 Dijkstra：两者选边策略不同，结果树也不同"
+        }
+      ]
+    }
+  ]
+}

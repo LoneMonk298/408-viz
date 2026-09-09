@@ -5,7 +5,7 @@
 ```json
 {
   "schema_version": 1,
-  "struct_type": "tree | fsm | array | timeline",
+  "struct_type": "tree | fsm | array | timeline | graph",
   "meta": { "title": "...", "caption": "..." },
   "presets": [{ "name": "...", "steps": [...] }]
 }
@@ -92,9 +92,45 @@
 - `steps[].active`：当前步骤高亮的 bar id 列表（绿色脉冲）；active 且未完成的 bar 额外显示半透明全长预览（调度已决定的区间）
 - 时间轴刻度自动生成，LLM 无需指定
 
+## graph
+
+带权图（Dijkstra / Prim / BFS / DFS / 拓扑排序）。**nodes/edges 全局定义一次**，每步只标记状态；同一张图的不同算法用不同 preset（如 Dijkstra vs Prim）。
+
+```json
+{
+  "directed": false,
+  "nodes": [
+    { "id": "v0", "label": "v0", "x": 10, "y": 50 },
+    { "id": "v1", "label": "v1", "x": 38, "y": 10 }
+  ],
+  "edges": [
+    { "id": "e01", "from": "v0", "to": "v1", "weight": 10 }
+  ],
+  "presets": [{
+    "name": "Dijkstra 从 v0 出发",
+    "steps": [{
+      "hl": [
+        { "node_id": "v0", "kind": "done" },
+        { "node_id": "v1", "kind": "frontier" }
+      ],
+      "edge_hl": [{ "edge_id": "e01", "kind": "tree" }],
+      "vals": [{ "node_id": "v1", "val": "10" }],
+      "title": "第 1 轮：确定 v0", "desc": "..."
+    }]
+  }]
+}
+```
+
+- `directed`：可选，默认 false（无向）；true 时边带箭头
+- `nodes`：2-12 个；`x`/`y` 可选（0-100 归一化坐标，**全部节点都提供才生效**，否则圆形自动布局）——小图建议提供显式坐标还原教材图版式
+- `edges`：1-30 条；`weight` 可选（0-999），显示在边中点
+- 节点高亮 `hl`，kind ∈ `visit`（当前处理，蓝色脉冲）/ `frontier`（已发现未处理，琥珀）/ `done`（已确定，绿）/ `path`（最终路径，紫）/ `found`（目标命中）
+- 边高亮 `edge_hl`，kind ∈ `relax`（松弛/考察中，琥珀粗线）/ `tree`（树边/已选中，绿粗线）/ `path`（路径边，紫粗线）
+- `vals`：节点下方数值徽章（dist / 深度 / 访问序号等），字符串或整数（`"∞"` 直接支持）——Dijkstra 的 dist 演化核心载体
+
 ## 校验规则（validate.py）
 
 - 未知字段拒收（schema 层 `additionalProperties: false`，校验器同步检查）
-- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中
+- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中；graph 的 `from/to`/`hl.node_id`/`vals.node_id` 必须在 nodes 中、`edge_hl.edge_id` 必须在 edges 中
 - 时序合法性（timeline）：同一行内 bars 不得重叠；`reveal` / `markers.t` 必须在 0..该 preset 最大 end 范围内
-- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，presets 1-12，steps ≤ 80
+- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，graph nodes 2-12 / edges 1-30，presets 1-12，steps ≤ 80

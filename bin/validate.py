@@ -11,6 +11,8 @@ BASE = Path(__file__).parent.parent
 HL_KINDS = {'insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'}
 ARRAY_HL_KINDS = {'insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'found', 'removed'}
 FSM_TYPES = {'start', 'active', 'success', 'failure', 'terminal'}
+GRAPH_NODE_KINDS = {'visit', 'frontier', 'done', 'path', 'found'}
+GRAPH_EDGE_KINDS = {'relax', 'tree', 'path'}
 
 
 def _walk_tree_ids(node, acc):
@@ -26,7 +28,7 @@ def _walk_tree_ids(node, acc):
 
 def validate_ir(data):
     assert data.get('schema_version') == 1, 'schema_version must be 1'
-    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline'), f"unknown struct_type: {data.get('struct_type')}"
+    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline', 'graph'), f"unknown struct_type: {data.get('struct_type')}"
     assert data.get('meta', {}).get('title'), 'meta.title required'
     assert data.get('presets'), 'presets required'
     t = data['struct_type']
@@ -109,6 +111,50 @@ def validate_ir(data):
                     f"steps[{si}].reveal '{s['reveal']}' out of range 0..{max_end} (preset {pi})"
                 for aid in s.get('active', []):
                     assert aid in bar_ids, f"active '{aid}' not in bars (preset {pi} step {si})"
+    elif t == 'graph':
+        assert isinstance(data.get('directed', False), bool), 'directed must be bool'
+        nodes = data.get('nodes', [])
+        assert 2 <= len(nodes) <= 12, 'nodes must be 2-12'
+        node_ids = set()
+        for n in nodes:
+            nid = n.get('id')
+            assert nid, 'nodes[].id required'
+            assert nid not in node_ids, f"duplicate node id '{nid}'"
+            node_ids.add(nid)
+            for k in ('x', 'y'):
+                if k in n:
+                    assert isinstance(n[k], (int, float)) and 0 <= n[k] <= 100, \
+                        f"node '{nid}' {k} must be a number in 0-100"
+        edges = data.get('edges', [])
+        assert 1 <= len(edges) <= 30, 'edges must be 1-30'
+        edge_ids = set()
+        for e in edges:
+            eid = e.get('id')
+            assert eid, 'edges[].id required'
+            assert eid not in edge_ids, f"duplicate edge id '{eid}'"
+            edge_ids.add(eid)
+            assert e.get('from') in node_ids, f"edge '{eid}' from '{e.get('from')}' not in nodes"
+            assert e.get('to') in node_ids, f"edge '{eid}' to '{e.get('to')}' not in nodes"
+            if 'weight' in e:
+                assert isinstance(e['weight'], (int, float)) and e['weight'] >= 0, \
+                    f"edge '{eid}' weight must be a non-negative number"
+        for pi, p in enumerate(data['presets']):
+            assert p.get('name'), f'preset[{pi}].name required'
+            for si, s in enumerate(p['steps']):
+                assert s.get('title'), f'preset[{pi}].steps[{si}].title required'
+                assert s.get('desc') is not None, f'preset[{pi}].steps[{si}].desc required'
+                for h in s.get('hl', []):
+                    assert h.get('node_id') in node_ids, \
+                        f"hl.node_id '{h.get('node_id')}' not in nodes (preset {pi} step {si})"
+                    assert h['kind'] in GRAPH_NODE_KINDS, f"hl.kind '{h['kind']}' invalid"
+                for h in s.get('edge_hl', []):
+                    assert h.get('edge_id') in edge_ids, \
+                        f"edge_hl.edge_id '{h.get('edge_id')}' not in edges (preset {pi} step {si})"
+                    assert h['kind'] in GRAPH_EDGE_KINDS, f"edge_hl.kind '{h['kind']}' invalid"
+                for v in s.get('vals', []):
+                    assert v.get('node_id') in node_ids, \
+                        f"vals.node_id '{v.get('node_id')}' not in nodes (preset {pi} step {si})"
+                    assert v.get('val') is not None, f"vals.val required (preset {pi} step {si})"
     elif t == 'fsm':
         state_ids = {s['id'] for s in data['states']}
         trans_ids = {tr['id'] for tr in data['transitions'] if tr.get('id')}

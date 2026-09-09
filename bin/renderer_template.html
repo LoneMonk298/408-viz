@@ -272,6 +272,11 @@ const HL_COLORS = {
   io:        { fill: '#f08c00', stroke: '#f08c00', fillSoft: 'rgba(240,140,0,0.30)' },
   idle:      { fill: '#adb5bd', stroke: '#adb5bd', fillSoft: 'rgba(134,142,150,0.18)' },
   active:    { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.18)' },
+  frontier:  { fill: '#f59f00', stroke: '#e8590c', fillSoft: 'rgba(245,159,0,0.20)' },
+  done:      { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.15)' },
+  path:      { fill: '#9c36b5', stroke: '#9c36b5', fillSoft: 'rgba(156,54,181,0.18)' },
+  tree:      { fill: '#2f9e44', stroke: '#2f9e44', fillSoft: 'rgba(47,158,68,0.22)' },
+  relax:     { fill: '#f59f00', stroke: '#e8590c', fillSoft: 'rgba(245,159,0,0.18)' },
 };
 const LEGEND = {
   insert:    '新插入',
@@ -288,6 +293,11 @@ const LEGEND = {
   io:        'I/O',
   idle:      '空闲',
   active:    '进行中',
+  frontier:  '已发现',
+  done:      '已确定',
+  path:      '路径',
+  tree:      '树边',
+  relax:     '松弛中',
 };
 
 // ===== 状态 =====
@@ -487,6 +497,31 @@ function computeTimelineLayout(rows, bars, markers, maxReveal, labelColor, w, h)
   return { rows: rowInfo, bars: barInfo, markers: markerInfo, maxT, tick, t2x, axisY, rowTop, rowBottom, chartL, chartW };
 }
 
+// ===== 布局：图（显式 x/y 0-100 归一化坐标，缺省时圆形自动布局）=====
+function computeGraphLayout(nodes, w, h) {
+  const padL = 70, padR = 50, padT = 64, padB = 96;
+  const availW = Math.max(100, w - padL - padR);
+  const availH = Math.max(100, h - padT - padB);
+  const hasXY = nodes.every(n => typeof n.x === 'number' && typeof n.y === 'number');
+  const maxLen = Math.max(...nodes.map(n => String(n.label || n.id).length), 2);
+  const r = clamp(14 + maxLen * 3.2, 20, 30);
+  const cx = padL + availW / 2, cy = padT + availH / 2;
+  const nodeInfo = nodes.map((n, i) => {
+    let x, y;
+    if (hasXY) {
+      x = padL + (n.x / 100) * availW;
+      y = padT + (n.y / 100) * availH;
+    } else {
+      const ang = -Math.PI / 2 + (i / nodes.length) * Math.PI * 2;
+      const rho = Math.min(availW, availH) * 0.38;
+      x = cx + Math.cos(ang) * rho;
+      y = cy + Math.sin(ang) * rho;
+    }
+    return { ...n, x, y, r };
+  });
+  return { nodes: nodeInfo, r };
+}
+
 // ===== 应用步骤 =====
 function applyStep(idx) {
   if (idx < 0 || idx >= S.steps.length) return;
@@ -533,6 +568,10 @@ function applyStep(idx) {
         S.display[n.id] = { x: n.x, y: n.y, a: 0.6, tx: n.x, ty: n.y, ta: 0.6, r: n.r, tr: n.r };
       }
     });
+    // 当前 active 高亮
+    S.hl = {};
+    (st.active || []).forEach(id => { S.hl[id] = 'insert'; });
+    S.lastTrans = new Set((st.lastTrans || []).map(t => t.id));
   } else if (IR.struct_type === 'array') {
     const r = canvas.getBoundingClientRect();
     const lay = computeArrayLayout(st.array, r.width, r.height);
@@ -593,6 +632,15 @@ function applyStep(idx) {
     if (!S.nowT) S.nowT = { t: st.reveal, tt: st.reveal };
     else S.nowT.tt = st.reveal;
     S.active = new Set(st.active || []);
+  } else if (IR.struct_type === 'graph') {
+    const r = canvas.getBoundingClientRect();
+    S.layout = computeGraphLayout(IR.nodes || [], r.width, r.height);
+    S.hl = {};
+    (st.hl || []).forEach(h => { S.hl[h.node_id] = h.kind; });
+    S.edgeHl = {};
+    (st.edge_hl || []).forEach(h => { S.edgeHl[h.edge_id] = h.kind; });
+    S.vals = {};
+    (st.vals || []).forEach(v => { S.vals[v.node_id] = String(v.val); });
   }
 }
 
@@ -617,6 +665,7 @@ function draw(ts) {
   else if (IR.struct_type === 'fsm') drawFSM(ts);
   else if (IR.struct_type === 'array') drawArray(ts);
   else if (IR.struct_type === 'timeline') drawTimeline(ts);
+  else if (IR.struct_type === 'graph') drawGraph(ts);
 }
 
 // ===== 树渲染 =====
@@ -684,21 +733,21 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   t = clamp(t, 0, 1);
   return Math.hypot(px - (x1 + t*dx), py - (y1 + t*dy));
 }
-function drawArrowHead(x, y, ux, uy, hl, edgeColor) {
+function drawArrowHead(x, y, ux, uy, color) {
   const ah = 7;
   ctx.beginPath();
   ctx.moveTo(x, y);
   ctx.lineTo(x - ux*ah - uy*ah*0.5, y - uy*ah + ux*ah*0.5);
   ctx.lineTo(x - ux*ah + uy*ah*0.5, y - uy*ah - ux*ah*0.5);
   ctx.closePath();
-  ctx.fillStyle = hl ? '#40c057' : edgeColor;
+  ctx.fillStyle = color;
   ctx.fill();
 }
-function drawEdgeLabel(lbl, x, y, hl, dark, textColor) {
+function drawEdgeLabel(lbl, x, y, color, dark, textColor) {
   const w = ctx.measureText(lbl).width + 8;
   ctx.fillStyle = dark ? '#1e1e20' : '#ffffff';
   ctx.fillRect(x - w/2, y - 9, w, 18);
-  ctx.fillStyle = hl ? '#40c057' : textColor;
+  ctx.fillStyle = color;
   ctx.fillText(lbl, x, y);
 }
 
@@ -719,7 +768,8 @@ function drawFSM(ts) {
     const b = nodes.find(n => n.id === tr.to);
     if (!a || !b) return;
     const hl = S.lastTrans && S.lastTrans.has(tr.id);
-    ctx.strokeStyle = hl ? '#40c057' : edgeColor;
+    const hlColor = hl ? '#40c057' : null;
+    ctx.strokeStyle = hlColor || edgeColor;
     ctx.lineWidth = hl ? 3 : 1.5;
     const lbl = tr.label || '';
 
@@ -729,8 +779,8 @@ function drawFSM(ts) {
       ctx.beginPath();
       ctx.arc(a.x, cy0, rho, Math.PI, Math.PI * 2);
       ctx.stroke();
-      drawArrowHead(a.x + rho, cy0, 0, 1, hl, edgeColor);
-      if (lbl) drawEdgeLabel(lbl, a.x, cy0 - rho - 12, hl, dark, textColor);
+      drawArrowHead(a.x + rho, cy0, 0, 1, hlColor || edgeColor);
+      if (lbl) drawEdgeLabel(lbl, a.x, cy0 - rho - 12, hlColor || textColor, dark, textColor);
       return;
     }
 
@@ -759,18 +809,18 @@ function drawFSM(ts) {
       // 箭头沿曲线终点切线方向
       let tx = x2 - cx, ty = y2 - cy;
       const tl = Math.hypot(tx, ty) || 1;
-      drawArrowHead(x2, y2, tx / tl, ty / tl, hl, edgeColor);
+      drawArrowHead(x2, y2, tx / tl, ty / tl, hlColor || edgeColor);
       // label 放贝塞尔中点（弧线最低/最高处）
       if (lbl) drawEdgeLabel(lbl,
         0.25*x1 + 0.5*cx + 0.25*x2, 0.25*y1 + 0.5*cy + 0.25*y2,
-        hl, dark, textColor);
+        hlColor || textColor, dark, textColor);
     } else {
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
-      drawArrowHead(x2, y2, ux, uy, hl, edgeColor);
-      if (lbl) drawEdgeLabel(lbl, (x1 + x2) / 2, (y1 + y2) / 2, hl, dark, textColor);
+      drawArrowHead(x2, y2, ux, uy, hlColor || edgeColor);
+      if (lbl) drawEdgeLabel(lbl, (x1 + x2) / 2, (y1 + y2) / 2, hlColor || textColor, dark, textColor);
     }
   });
 
@@ -1068,12 +1118,99 @@ function drawTimeline(ts) {
   ctx.restore();
 }
 
+// ===== 图渲染 =====
+function drawGraph(ts) {
+  const dark = isDark();
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const edgeColor = dark ? '#3a3d44' : '#dee2e6';
+  const nodes = S.layout.nodes;
+  const directed = !!IR.directed;
+  const byId = {};
+  nodes.forEach(n => { byId[n.id] = n; });
+
+  // 边（权重 label 在中点；高亮 kind 决定颜色/线宽）
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  (IR.edges || []).forEach(e => {
+    const a = byId[e.from], b = byId[e.to];
+    if (!a || !b) return;
+    const kind = S.edgeHl[e.id];
+    const hlColor = kind ? HL_COLORS[kind].stroke : null;
+    ctx.strokeStyle = hlColor || edgeColor;
+    ctx.lineWidth = kind ? 3.5 : 1.5;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    const x1 = a.x + ux * a.r, y1 = a.y + uy * a.r;
+    const x2 = b.x - ux * (b.r + (directed ? 8 : 0));
+    const y2 = b.y - uy * (b.r + (directed ? 8 : 0));
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    if (directed) drawArrowHead(x2, y2, ux, uy, hlColor || edgeColor);
+    if (e.weight != null) {
+      const lblColor = hlColor || '#868e96';
+      drawEdgeLabel(String(e.weight), (x1 + x2) / 2, (y1 + y2) / 2, lblColor, dark, textColor);
+    }
+  });
+
+  // 节点（kind 着色，visit 脉冲）
+  nodes.forEach(n => {
+    let fill = dark ? '#252527' : '#ffffff';
+    let stroke = dark ? '#5c5f66' : '#c1c6cc';
+    const kind = S.hl[n.id];
+    if (kind && HL_COLORS[kind]) {
+      fill = HL_COLORS[kind].fillSoft;
+      stroke = HL_COLORS[kind].stroke;
+    }
+    ctx.save();
+    if (kind === 'visit' || kind === 'found') {
+      const pulse = (Math.sin(ts / 180) + 1) / 2;
+      ctx.shadowColor = 'rgba(64,192,87,' + (0.3 + 0.25 * pulse) + ')';
+      ctx.shadowBlur = 6 + 5 * pulse;
+    }
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = kind ? 3 : 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = textColor;
+    ctx.font = '600 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(n.label || n.id), n.x, n.y);
+    // 数值徽章（dist/深度/序号等，节点下方）
+    const val = S.vals && S.vals[n.id];
+    if (val != null) {
+      const vw = ctx.measureText(val).width + 10;
+      const bx = n.x - vw / 2, by = n.y + n.r + 6;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, vw, 16, 4);
+      ctx.fillStyle = dark ? '#34373d' : '#f1f3f5';
+      ctx.fill();
+      ctx.strokeStyle = kind ? HL_COLORS[kind].stroke : (dark ? '#5c5f66' : '#ced4da');
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = dark ? '#e9ecef' : '#495057';
+      ctx.font = '600 10px -apple-system, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val, n.x, by + 8);
+    }
+  });
+}
+
 // ===== 图例 =====
 const LEGEND_KINDS = {
   tree: ['insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'],
   fsm: ['insert'],
   array: ['insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'found', 'removed'],
   timeline: ['run', 'io', 'idle', 'active'],
+  graph: ['visit', 'frontier', 'done', 'path', 'tree', 'relax'],
 };
 function renderLegend() {
   const legend = $('legend');

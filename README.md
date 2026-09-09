@@ -6,15 +6,16 @@
 
 | 模块 | 状态 |
 |---|---|
-| IR Schema (tree / fsm / array / timeline) | ✅ `schemas/*.schema.json` |
-| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠全检查） |
+| IR Schema (tree / fsm / array / timeline / graph) | ✅ `schemas/*.schema.json` |
+| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠、graph 节点/边引用全检查） |
 | 渲染器模板（通用播放器） | ✅ `bin/renderer_template.html`（toolbar/字幕/图例/主题同步/键盘快捷键） |
 | 渲染脚本 | ✅ `bin/render.py` |
 | tree 渲染器 | ✅ tidy 布局（叶子槽位+父居中+单子方向偏移）、半径/层级自适应、脉冲高亮 |
 | fsm 渲染器 | ✅ 状态圆、有向边+箭头+label、回环/前跳弧线绕行、最后转移高亮 |
 | array 渲染器 | ✅ 格子+下标、low/mid/high 指针、swap 双弧交叉飞行动画、8 种语义色 |
 | timeline 渲染器 | ✅ 甘特横道、时间游标动画、进程分色、到达标记、active 半透明全长预览 |
-| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling` |
+| graph 渲染器 | ✅ 显式/圆形布局、带权边、dist 数值徽章、松弛/树边语义色、可选有向 |
+| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling`、`dijkstra-prim` |
 
 ## 快速开始
 
@@ -33,7 +34,7 @@ python3 bin/build_all.py
 
 ## IR 设计
 
-四种 `struct_type`：
+五种 `struct_type`：
 
 **tree** —— 每步是完整树快照 + 高亮。`children` 位置 0=左子、1=右子，单右子用 `null` 占位
 ```json
@@ -63,6 +64,19 @@ python3 bin/build_all.py
 ```
 bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一致）；游标动画驱动 bar 生长，active 未完成的 bar 显示半透明全长预览。
 
+**graph** —— 带权图（Dijkstra/Prim/BFS/DFS）。节点/边全局定义，每步标记节点态、边态和数值徽章
+```json
+{ "directed": false,
+  "nodes": [{"id": "v0", "label": "v0", "x": 10, "y": 50}],
+  "edges": [{"id": "e01", "from": "v0", "to": "v1", "weight": 10}],
+  "presets": [{
+    "steps": [{"hl": [{"node_id": "v0", "kind": "done"}],
+               "edge_hl": [{"edge_id": "e01", "kind": "tree"}],
+               "vals": [{"node_id": "v1", "val": "10"}],
+               "title": "...", "desc": "..."}] }] }
+```
+节点 kind ∈ `visit/frontier/done/path/found`，边 kind ∈ `relax/tree/path`；`vals` 徽章显示 dist/深度/序号（支持 `∞`）。`x/y` 0-100 归一化坐标可选，缺省圆形自动布局。
+
 详见 `schemas/README.md`。
 
 ## 设计原则（来自 https://github.com/tt-a1i/archify）
@@ -75,6 +89,6 @@ bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一�
 
 ## 路线图
 
-- v2：加 `graph`（路由/最短路）、`grid`（加法器/Cache 映射/子网）
+- v2：加 `grid`（加法器/Cache 映射/子网划分）
 - v3：接 sensenova 的 LLM 解析器（输入题目+答案 → 生成 IR），确定性校验 + 重试
 - v4：合并到 vitepress 仓库的 `feature/408-viz` 分支，与 `<VizEmbed>` 打通
