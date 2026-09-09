@@ -308,49 +308,45 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', () => { resizeCanvas(); draw(0); });
 
-// ===== 布局：树（中序遍历 → 均匀槽位 → 画布居中）=====
+// ===== 布局：树（tidy 布局：叶子占单位槽位，内部节点取子节点范围中点，整体居中）=====
 function computeTreeLayout(root, w, h) {
-  if (!root) return { nodes: [], r: 16 };
+  if (!root) return { nodes: [], layerGap: 0, r: 16 };
   const insetL = 60, insetR = 60, topPad = 70, bottomPad = 100;
   const availW = Math.max(100, w - insetL - insetR);
   const availH = Math.max(120, h - topPad - bottomPad);
-  // 中序遍历
-  const ordered = [];
-  (function inorder(n) {
-    if (!n) return;
-    inorder(n.children && n.children[0]);
-    ordered.push(n);
-    inorder(n.children && n.children[1]);
-  })(root);
-  const n = ordered.length || 1;
-  const gapX = n <= 1 ? 0 : availW / (n - 1);
-  const r = clamp(gapX * 0.28, 14, 22);
-  // x：n=1 时居中；n>1 时首节点在 insetL，末节点在 insetL+availW
-  const inorderX = {};
-  ordered.forEach((node, i) => {
-    inorderX[node.id] = n === 1
-      ? insetL + availW / 2
-      : insetL + i * gapX;
-  });
-  // 深度
-  const depth = {};
+  // 自底向上分配槽位：叶子依次 0,1,2...；内部节点 = 首末子节点槽位中点
+  const slot = {}, depth = {};
+  let nextSlot = 0, maxDepth = 0;
   (function walk(n, d) {
     if (!n) return;
     depth[n.id] = d;
-    (n.children || []).forEach(c => walk(c, d + 1));
+    if (d > maxDepth) maxDepth = d;
+    const kids = (n.children || []).filter(Boolean);
+    if (!kids.length) {
+      slot[n.id] = nextSlot++;
+      return;
+    }
+    kids.forEach(c => walk(c, d + 1));
+    slot[n.id] = (slot[kids[0].id] + slot[kids[kids.length - 1].id]) / 2;
   })(root, 0);
-  const maxDepth = Object.values(depth).reduce((a, b) => Math.max(a, b), 0) || 1;
-  const layerGap = maxDepth === 0 ? 0 : availH / maxDepth;
-  // 收集节点
+  // 槽位间距：撑满可用宽度，但小树不过度拉伸（上限 150px）
+  const spanX = Math.max(0, nextSlot - 1);
+  const sx = spanX === 0 ? 150 : Math.min(availW / spanX, 150);
+  const x0 = insetL + (availW - spanX * sx) / 2;
+  // 半径随间距缩放，保证相邻节点不重叠
+  const r = Math.max(10, Math.min(clamp(sx * 0.3, 14, 22), (sx - 10) / 2));
+  // 层间距：撑满可用高度，上限 120px、下限 2r+12（防深树垂直重叠）；浅树垂直居中
+  const layerGap = maxDepth === 0 ? 0 : clamp(availH / maxDepth, 2 * r + 12, 120);
+  const y0 = topPad + (availH - maxDepth * layerGap) / 2;
   const nodes = [];
   (function collect(n) {
     if (!n) return;
     nodes.push({
       id: n.id, val: n.val,
-      x: inorderX[n.id],
-      y: topPad + depth[n.id] * layerGap,
+      x: x0 + slot[n.id] * sx,
+      y: y0 + depth[n.id] * layerGap,
       r: r,
-      children: (n.children || []).map(c => c.id),
+      children: (n.children || []).filter(Boolean).map(c => c.id),
     });
     (n.children || []).forEach(collect);
   })(root);
