@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://408-viz.local/schemas/array.schema.json",
+  "title": "408-Viz Array IR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "struct_type", "meta", "presets"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "struct_type": { "const": "array" },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "caption": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/preset" }
+    }
+  },
+  "$defs": {
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "steps"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["array", "title", "desc"],
+      "properties": {
+        "array": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "type": ["integer", "string", "null"] }
+        },
+        "hl": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/highlight" }
+        },
+        "ptrs": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/pointer" }
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "desc": { "type": "string", "maxLength": 400 }
+      }
+    },
+    "highlight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "kind"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0, "maximum": 19 },
+        "kind": {
+          "enum": ["insert", "visit", "compare", "swap", "pivot", "sorted", "found", "removed"]
+        }
+      }
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "index"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 12 },
+        "index": { "type": "integer", "minimum": 0, "maximum": 19 }
+      }
+    }
+  }
+}

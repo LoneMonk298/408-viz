@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "struct_type": "array",
+  "meta": {
+    "title": "冒泡排序：4 个元素",
+    "caption": "相邻比较、大者下沉，每趟确定一个最大值"
+  },
+  "presets": [
+    {
+      "name": "升序冒泡 [5,2,8,1]",
+      "steps": [
+        {
+          "array": [5, 2, 8, 1],
+          "title": "初始",
+          "desc": "待排序序列 `5, 2, 8, 1`，从小到大排序"
+        },
+        {
+          "array": [2, 5, 8, 1],
+          "hl": [
+            { "index": 0, "kind": "swap" },
+            { "index": 1, "kind": "swap" }
+          ],
+          "title": "第 1 趟 · 比较 5 和 2",
+          "desc": "5 > 2，交换"
+        },
+        {
+          "array": [2, 5, 8, 1],
+          "hl": [
+            { "index": 1, "kind": "compare" },
+            { "index": 2, "kind": "compare" }
+          ],
+          "title": "第 1 趟 · 比较 5 和 8",
+          "desc": "5 < 8，不交换"
+        },
+        {
+          "array": [2, 5, 1, 8],
+          "hl": [
+            { "index": 2, "kind": "swap" },
+            { "index": 3, "kind": "swap" }
+          ],
+          "title": "第 1 趟 · 比较 8 和 1",
+          "desc": "8 > 1，交换。第 1 趟结束，最大值 8 就位"
+        },
+        {
+          "array": [2, 5, 1, 8],
+          "hl": [{ "index": 3, "kind": "sorted" }],
+          "title": "第 2 趟开始",
+          "desc": "8 已就位，只需在前 3 个元素中继续"
+        },
+        {
+          "array": [2, 5, 1, 8],
+          "hl": [
+            { "index": 0, "kind": "compare" },
+            { "index": 1, "kind": "compare" },
+            { "index": 3, "kind": "sorted" }
+          ],
+          "title": "第 2 趟 · 比较 2 和 5",
+          "desc": "2 < 5，不交换"
+        },
+        {
+          "array": [2, 1, 5, 8],
+          "hl": [
+            { "index": 1, "kind": "swap" },
+            { "index": 2, "kind": "swap" },
+            { "index": 3, "kind": "sorted" }
+          ],
+          "title": "第 2 趟 · 比较 5 和 1",
+          "desc": "5 > 1，交换。第 2 趟结束，5 就位"
+        },
+        {
+          "array": [1, 2, 5, 8],
+          "hl": [
+            { "index": 0, "kind": "swap" },
+            { "index": 1, "kind": "swap" },
+            { "index": 2, "kind": "sorted" },
+            { "index": 3, "kind": "sorted" }
+          ],
+          "title": "第 3 趟 · 比较 2 和 1",
+          "desc": "2 > 1，交换。第 3 趟结束，2 就位"
+        },
+        {
+          "array": [1, 2, 5, 8],
+          "hl": [
+            { "index": 0, "kind": "sorted" },
+            { "index": 1, "kind": "sorted" },
+            { "index": 2, "kind": "sorted" },
+            { "index": 3, "kind": "sorted" }
+          ],
+          "title": "排序完成",
+          "desc": "共 3 趟、5 次比较、3 次交换，结果 `1, 2, 5, 8`"
+        }
+      ]
+    }
+  ]
+}

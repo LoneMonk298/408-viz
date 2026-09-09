@@ -9,6 +9,7 @@ from pathlib import Path
 BASE = Path(__file__).parent.parent
 
 HL_KINDS = {'insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'}
+ARRAY_HL_KINDS = {'insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'found', 'removed'}
 FSM_TYPES = {'start', 'active', 'success', 'failure', 'terminal'}
 
 
@@ -25,7 +26,7 @@ def _walk_tree_ids(node, acc):
 
 def validate_ir(data):
     assert data.get('schema_version') == 1, 'schema_version must be 1'
-    assert data.get('struct_type') in ('tree', 'fsm'), f"unknown struct_type: {data.get('struct_type')}"
+    assert data.get('struct_type') in ('tree', 'fsm', 'array'), f"unknown struct_type: {data.get('struct_type')}"
     assert data.get('meta', {}).get('title'), 'meta.title required'
     assert data.get('presets'), 'presets required'
     t = data['struct_type']
@@ -42,6 +43,26 @@ def validate_ir(data):
                 for h in s.get('hl', []):
                     assert h['node_id'] in ids, f"hl.node_id '{h['node_id']}' not in tree (preset {pi} step {si})"
                     assert h['kind'] in HL_KINDS, f"hl.kind '{h['kind']}' invalid"
+    elif t == 'array':
+        for pi, p in enumerate(data['presets']):
+            assert p.get('name'), f'preset[{pi}].name required'
+            for si, s in enumerate(p['steps']):
+                assert s.get('title'), f'preset[{pi}].steps[{si}].title required'
+                assert s.get('desc') is not None, f'preset[{pi}].steps[{si}].desc required'
+                arr = s.get('array')
+                assert isinstance(arr, list) and 1 <= len(arr) <= 20, \
+                    f'preset[{pi}].steps[{si}].array must be a list of 1-20 items'
+                for v in arr:
+                    assert v is None or isinstance(v, (int, str)), \
+                        f'preset[{pi}].steps[{si}].array items must be int, string or null'
+                for h in s.get('hl', []):
+                    assert isinstance(h.get('index'), int) and 0 <= h['index'] < len(arr), \
+                        f"hl.index '{h.get('index')}' out of range (preset {pi} step {si})"
+                    assert h['kind'] in ARRAY_HL_KINDS, f"hl.kind '{h['kind']}' invalid"
+                for ptr in s.get('ptrs', []):
+                    assert ptr.get('name'), f"ptrs.name required (preset {pi} step {si})"
+                    assert isinstance(ptr.get('index'), int) and 0 <= ptr['index'] < len(arr), \
+                        f"ptrs.index '{ptr.get('index')}' out of range (preset {pi} step {si})"
     elif t == 'fsm':
         state_ids = {s['id'] for s in data['states']}
         trans_ids = {tr['id'] for tr in data['transitions'] if tr.get('id')}

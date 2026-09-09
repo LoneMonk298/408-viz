@@ -6,13 +6,14 @@
 
 | 模块 | 状态 |
 |---|---|
-| IR Schema (tree / fsm) | ✅ `schemas/*.schema.json` |
-| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用全检查） |
+| IR Schema (tree / fsm / array) | ✅ `schemas/*.schema.json` |
+| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围全检查） |
 | 渲染器模板（通用播放器） | ✅ `bin/renderer_template.html`（toolbar/字幕/图例/主题同步/键盘快捷键） |
 | 渲染脚本 | ✅ `bin/render.py` |
-| tree 渲染器 | ✅ 中序定位、半径/层级自适应、脉冲高亮、6 种语义色 |
-| fsm 渲染器 | ✅ 状态圆、有向边+箭头+label、最后转移高亮、start/success/failure 类型色 |
-| 示例 | ✅ `examples/bst-insert.json`、`examples/counter-2bit.json` |
+| tree 渲染器 | ✅ tidy 布局（叶子槽位+父居中+单子方向偏移）、半径/层级自适应、脉冲高亮 |
+| fsm 渲染器 | ✅ 状态圆、有向边+箭头+label、回环/前跳弧线绕行、最后转移高亮 |
+| array 渲染器 | ✅ 格子+下标、low/mid/high 指针、swap 双弧交叉飞行动画、8 种语义色 |
+| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort` |
 
 ## 快速开始
 
@@ -31,7 +32,7 @@ python3 bin/build_all.py
 
 ## IR 设计
 
-两种 `struct_type`：
+三种 `struct_type`：
 
 **tree** —— 每步是完整树快照 + 高亮。`children` 位置 0=左子、1=右子，单右子用 `null` 占位
 ```json
@@ -42,6 +43,13 @@ python3 bin/build_all.py
 ```json
 { "states": [...], "transitions": [...], "steps": [{"active": ["S1"], "lastTrans": [{"id": "t01"}]}] }
 ```
+
+**array** —— 每步是完整数组快照（支持 `null` 空位）+ 按下标高亮 + 命名指针
+```json
+{ "array": [7, 13, 21, 34], "hl": [{"index": 1, "kind": "compare"}],
+  "ptrs": [{"name": "mid", "index": 1}], "title": "...", "desc": "..." }
+```
+高亮 kind：`insert/visit/compare/swap/pivot/sorted/found/removed`。相邻两步数组恰好两位置互换时自动触发 swap 双弧交叉飞行动画（排序场景）。
 
 详见 `schemas/README.md`。
 
@@ -55,6 +63,6 @@ python3 bin/build_all.py
 
 ## 路线图
 
-- v2：加 `array`（排序/查找）、`graph`（路由/最短路）、`timeline`（进程调度甘特）、`grid`（加法器/Cache 映射/子网）
+- v2：加 `graph`（路由/最短路）、`timeline`（进程调度甘特）、`grid`（加法器/Cache 映射/子网）
 - v3：接 sensenova 的 LLM 解析器（输入题目+答案 → 生成 IR），确定性校验 + 重试
 - v4：合并到 vitepress 仓库的 `feature/408-viz` 分支，与 `<VizEmbed>` 打通

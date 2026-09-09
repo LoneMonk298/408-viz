@@ -37,7 +37,7 @@
 |---|---|
 | tree | ✅ MVP 已实现 |
 | fsm | ✅ MVP 已实现 |
-| array | ⏳ 待做（排序/折半查找） |
+| array | ✅ 已实现（折半查找/冒泡排序，含 swap 双弧交叉动画） |
 | timeline | ⏳ 待做（进程调度甘特） |
 | graph | ⏳ 待做（路由/最短路） |
 | grid | ⏳ 待做（加法器/Cache/子网） |
@@ -132,6 +132,31 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 
 - `state.col` 0..5 决定横向列
 - 校验：transitions.from/to 必须在 states 中；active 必须在 states 中；lastTrans.id 必须在 transitions 中
+
+### array（2026-09-09 新增）
+
+```json
+{
+  "schema_version": 1,
+  "struct_type": "array",
+  "meta": { "title": "...", "caption": "..." },
+  "presets": [{
+    "name": "...",
+    "steps": [{
+      "array": [7, 13, 21, 34],
+      "hl": [{"index": 1, "kind": "compare"}],
+      "ptrs": [{"name": "mid", "index": 1}],
+      "title": "...", "desc": "..."
+    }]
+  }]
+}
+```
+
+- `array`：每步完整快照，1-20 元素，`int | string | null`（null=空位，如顺序表删除）
+- `hl`：按下标高亮，kind 枚举 `insert visit compare swap pivot sorted found removed`（compare=比较中，visit=操作区间，sorted=已就位，found=查找命中）
+- `ptrs`：命名指针（low/mid/high/i/j...），同一格多个指针自动横向错开
+- **swap 自动检测**：相邻两步长度相同且恰好两位置值互换 → 自动播放双弧交叉飞行动画（600ms，元素携带旧值飞行，结束后归位换值），排序场景无需额外标记
+- 校验：hl.index / ptrs.index 必须在数组下标范围内；schema 见 `schemas/array.schema.json`
 
 ---
 
@@ -294,13 +319,13 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 ## 八、待办（按优先级）
 
 1. ✅ 评估修复后的视觉效果（2026-09-09 完成：本地截图评估，发现并修复 3 个 bug，见第五节）
-2. ✅ commit + push 视觉修复到 feature/mvp（第一轮 ca42e5d 已推送；第二轮已本地 commit）
+2. ✅ commit + push 视觉修复到 feature/mvp（第一轮 ca42e5d、第三轮 740c4fd、第四轮 3da5f55 均已推送）
 3. ✅ FSM 视觉迭代（回环弧线部分缓解垂直空间问题，暂不再处理）
-4. **加 array 渲染器**（排序/折半查找，最简单，约 150 行）
+4. ✅ 加 array 渲染器（2026-09-09 完成：折半查找 + 冒泡排序示例，含 swap 双弧交叉动画，见第三节 array 规范）
 5. **加 timeline 渲染器**（进程调度甘特，408 大题常客，约 200 行）
 6. **加 graph 渲染器**（路由/最短路，约 200 行）
 7. **加 grid 渲染器**（加法器/Cache/子网，约 250 行）
-8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次）
+8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次；IR 规范文档 `schemas/README.md` 已备好可直接入提示词）
 9. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
 
 ---

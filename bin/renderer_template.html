@@ -264,6 +264,10 @@ const HL_COLORS = {
   unbalanced:{ fill: '#fab005', stroke: '#f59f00', fillSoft: 'rgba(250,176,5,0.25)' },
   rotated:   { fill: '#be4bdb', stroke: '#9c36b5', fillSoft: 'rgba(190,75,219,0.18)' },
   removed:   { fill: '#fa5252', stroke: '#e03131', fillSoft: 'rgba(250,82,82,0.22)' },
+  swap:      { fill: '#e8590c', stroke: '#d9480f', fillSoft: 'rgba(232,89,12,0.20)' },
+  pivot:     { fill: '#be4bdb', stroke: '#9c36b5', fillSoft: 'rgba(190,75,219,0.18)' },
+  sorted:    { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.10)' },
+  found:     { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.35)' },
 };
 const LEGEND = {
   insert:    '新插入',
@@ -272,6 +276,10 @@ const LEGEND = {
   unbalanced:'失衡根',
   rotated:   '旋转结点',
   removed:   '摘出结点',
+  swap:      '交换',
+  pivot:     '枢轴',
+  sorted:    '已就位',
+  found:     '命中',
 };
 
 // ===== 状态 =====
@@ -409,6 +417,27 @@ function computeFSMLayout(states, w, h) {
   return { nodes, r };
 }
 
+// ===== 布局：数组（格子等宽，整体居中；上方 index、下方指针）=====
+function computeArrayLayout(arr, w, h) {
+  const n = arr.length;
+  const insetL = 60, insetR = 60, topPad = 70, bottomPad = 110;
+  const availW = Math.max(100, w - insetL - insetR);
+  const availH = Math.max(120, h - topPad - bottomPad);
+  const cellW = clamp(availW / n, 44, 96);
+  const cellH = clamp(cellW * 0.68, 44, 72);
+  const x0 = insetL + (availW - n * cellW) / 2;
+  const y0 = topPad + (availH - cellH) / 2;
+  const nodes = [];
+  for (let i = 0; i < n; i++) {
+    nodes.push({
+      id: 'i' + i, index: i, val: arr[i],
+      x: x0 + i * cellW, y: y0,
+      cellW, cellH,
+    });
+  }
+  return { nodes, cellW, cellH, n };
+}
+
 // ===== 应用步骤 =====
 function applyStep(idx) {
   if (idx < 0 || idx >= S.steps.length) return;
@@ -455,10 +484,55 @@ function applyStep(idx) {
         S.display[n.id] = { x: n.x, y: n.y, a: 0.6, tx: n.x, ty: n.y, ta: 0.6, r: n.r, tr: n.r };
       }
     });
-    // 当前 active 高亮
+  } else if (IR.struct_type === 'array') {
+    const r = canvas.getBoundingClientRect();
+    const lay = computeArrayLayout(st.array, r.width, r.height);
+    const prev = idx > 0 ? S.steps[idx - 1].array : null;
+    const sameLen = prev && prev.length === st.array.length;
+    // swap 检测：长度相同且恰好两位置互换（排序交换的典型形态）
+    S.swapAnim = null;
+    let swapPair = null;
+    if (sameLen) {
+      const diff = [];
+      for (let i = 0; i < st.array.length; i++) {
+        if (prev[i] !== st.array[i]) diff.push(i);
+      }
+      if (diff.length === 2 &&
+          prev[diff[0]] === st.array[diff[1]] &&
+          prev[diff[1]] === st.array[diff[0]]) {
+        swapPair = diff;
+      }
+    }
+    if (!sameLen) {
+      // 长度变化：整体重建，新槽位淡入
+      S.display = {};
+      lay.nodes.forEach(nd => {
+        S.display[nd.id] = {
+          x: nd.x, y: nd.y, a: 0, tx: nd.x, ty: nd.y, ta: 1,
+          val: nd.val, tval: nd.val,
+        };
+      });
+    } else {
+      lay.nodes.forEach(nd => {
+        const d = S.display[nd.id];
+        if (d) {
+          d.tx = nd.x; d.ty = nd.y; d.ta = 1; d.tval = nd.val;
+          if (!swapPair) d.val = nd.val;
+        } else {
+          S.display[nd.id] = {
+            x: nd.x, y: nd.y, a: 0, tx: nd.x, ty: nd.y, ta: 1,
+            val: nd.val, tval: nd.val,
+          };
+        }
+      });
+      if (swapPair) {
+        S.swapAnim = { pair: swapPair, start: performance.now() };
+      }
+    }
+    S.layout = lay;
     S.hl = {};
-    (st.active || []).forEach(id => { S.hl[id] = 'insert'; });
-    S.lastTrans = new Set((st.lastTrans || []).map(t => t.id));
+    (st.hl || []).forEach(h => { S.hl[h.index] = h.kind; });
+    S.ptrs = st.ptrs || [];
   }
 }
 
@@ -480,6 +554,7 @@ function draw(ts) {
 
   if (IR.struct_type === 'tree') drawTree(ts);
   else if (IR.struct_type === 'fsm') drawFSM(ts);
+  else if (IR.struct_type === 'array') drawArray(ts);
 }
 
 // ===== 树渲染 =====
@@ -679,13 +754,114 @@ function drawFSM(ts) {
   });
 }
 
+// ===== 数组渲染 =====
+function drawArray(ts) {
+  const dark = isDark();
+  const baseFill = dark ? '#252527' : '#ffffff';
+  const baseStroke = dark ? '#5c5f66' : '#c1c6cc';
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const dimColor = dark ? '#868e96' : '#adb5bd';
+  const nodes = S.layout.nodes;
+  const { cellW, cellH } = S.layout;
+
+  // swap 飞行动画：600ms，两元素上下分层交叉飞行，各自携带旧值，结束后归位换值
+  let swapProg = 0;
+  if (S.swapAnim) {
+    swapProg = clamp((performance.now() - S.swapAnim.start) / 600, 0, 1);
+    if (swapProg >= 1) {
+      S.swapAnim.pair.forEach(i => {
+        const d = S.display['i' + i];
+        if (d) d.val = d.tval;
+      });
+      S.swapAnim = null;
+    }
+  }
+  const swapIdx = S.swapAnim ? S.swapAnim.pair : [];
+
+  nodes.forEach(nd => {
+    const d = S.display[nd.id];
+    if (!d) return;
+    const kind = S.hl[nd.index];
+    let fill = baseFill, stroke = baseStroke, lw = 1.5;
+    if (kind && HL_COLORS[kind]) {
+      fill = HL_COLORS[kind].fillSoft;
+      stroke = HL_COLORS[kind].stroke;
+      lw = 3;
+    }
+    // 交换中的元素：一上一下双弧交叉，水平错位 easing（先起飞的先到位），X 形轨迹不重叠
+    let ex = d.x, ey = d.y, eval_ = d.val, alpha = clamp(d.a, 0, 1);
+    const si = swapIdx.indexOf(nd.index);
+    if (si >= 0) {
+      const other = swapIdx[1 - si];
+      const p = si === 0
+        ? 1 - Math.pow(1 - swapProg, 1.7)
+        : Math.pow(swapProg, 1.7);
+      ex = d.x + (other - nd.index) * cellW * p;
+      ey = d.y - Math.sin(Math.PI * swapProg) * (si === 0 ? 48 : -40);
+    }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // 格子
+    ctx.beginPath();
+    ctx.roundRect(ex, ey, cellW - 3, cellH, 6);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    // index（格子上方）
+    ctx.fillStyle = dimColor;
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(nd.index), ex + (cellW - 3) / 2, ey - 11);
+    // 值
+    if (eval_ != null) {
+      ctx.fillStyle = textColor;
+      ctx.font = '600 15px -apple-system, sans-serif';
+      ctx.fillText(String(eval_), ex + (cellW - 3) / 2, ey + cellH / 2);
+    }
+    ctx.restore();
+  });
+
+  // 指针（格子下方，同一格多个指针横向错开）
+  const byIdx = {};
+  (S.ptrs || []).forEach(p => { (byIdx[p.index] = byIdx[p.index] || []).push(p.name); });
+  Object.keys(byIdx).forEach(i => {
+    const d = S.display['i' + i];
+    if (!d) return;
+    const names = byIdx[i];
+    const cx = d.x + (cellW - 3) / 2;
+    const yb = d.y + cellH;
+    names.forEach((name, k) => {
+      const off = (k - (names.length - 1) / 2) * 30;
+      ctx.save();
+      ctx.fillStyle = dark ? '#adb5bd' : '#495057';
+      // 倒三角
+      ctx.beginPath();
+      ctx.moveTo(cx + off - 4, yb + 6);
+      ctx.lineTo(cx + off + 4, yb + 6);
+      ctx.lineTo(cx + off, yb + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.font = '600 10px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(name, cx + off, yb + 14);
+      ctx.restore();
+    });
+  });
+}
+
 // ===== 图例 =====
+const LEGEND_KINDS = {
+  tree: ['insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'],
+  fsm: ['insert'],
+  array: ['insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'found', 'removed'],
+};
 function renderLegend() {
   const legend = $('legend');
-  const kinds = Object.keys(LEGEND);
-  // tree 显示所有相关 kind；fsm 只显示 insert（active）
-  let showKinds = kinds;
-  if (IR.struct_type === 'fsm') showKinds = ['insert'];
+  const showKinds = LEGEND_KINDS[IR.struct_type] || Object.keys(LEGEND);
   legend.innerHTML = showKinds
     .map(k => `<div class="legend-item">
       <span class="legend-dot" style="background:${HL_COLORS[k].fillSoft};border-color:${HL_COLORS[k].stroke}"></span>
