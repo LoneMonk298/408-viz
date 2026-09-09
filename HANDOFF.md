@@ -38,7 +38,7 @@
 | tree | ✅ MVP 已实现 |
 | fsm | ✅ MVP 已实现 |
 | array | ✅ 已实现（折半查找/冒泡排序，含 swap 双弧交叉动画） |
-| timeline | ⏳ 待做（进程调度甘特） |
+| timeline | ✅ 已实现（SJF vs FCFS 进程调度甘特，含游标动画/进程分色） |
 | graph | ⏳ 待做（路由/最短路） |
 | grid | ⏳ 待做（加法器/Cache/子网） |
 
@@ -157,6 +157,32 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 - `ptrs`：命名指针（low/mid/high/i/j...），同一格多个指针自动横向错开
 - **swap 自动检测**：相邻两步长度相同且恰好两位置值互换 → 自动播放双弧交叉飞行动画（600ms，元素携带旧值飞行，结束后归位换值），排序场景无需额外标记
 - 校验：hl.index / ptrs.index 必须在数组下标范围内；schema 见 `schemas/array.schema.json`
+
+### timeline（2026-09-09 新增）
+
+甘特横道图（进程调度/磁盘调度/流水线）。**rows 全局、bars/markers 为 preset 级**（SJF vs FCFS 对比 preset 各持不同调度序列）：
+
+```json
+{
+  "schema_version": 1,
+  "struct_type": "timeline",
+  "meta": { "title": "...", "caption": "..." },
+  "rows": [{ "id": "cpu", "label": "CPU" }],
+  "presets": [{
+    "name": "SJF 短作业优先",
+    "bars": [{ "id": "b1", "row": "cpu", "label": "P1", "start": 0, "end": 7 }],
+    "markers": [{ "t": 2, "label": "P2 到达" }],
+    "steps": [{ "reveal": 7, "active": ["b1"], "title": "...", "desc": "..." }]
+  }]
+}
+```
+
+- `rows` 1-4 行（CPU/IO 单行，或流水线 IF/ID/EX/MEM/WB 五行）
+- `bars`：`kind` ∈ `run/io/idle`；run 按 label 自动分色（8 色轮，**跨 preset 一致**——色表按全部 preset 首次出现顺序计算）；同 row 不允许重叠（校验器强制）
+- `steps[].reveal`：时间游标（必填，0..preset 最大 end）——游标动画驱动 bar 生长；`active` 绿色脉冲，active 且未完成的 bar 画半透明全长预览（调度已决定的区间，不剧透未调度的 bar）
+- 时间轴刻度自动生成（maxT≤20 → 步长 1，≤40 → 2，≤100 → 5 …）
+- 校验：row 引用、active 引用、bar 重叠、reveal/markers 范围；schema 见 `schemas/timeline.schema.json`
+- 实现要点：`S.nowT = {t, tt}` 插值（draw 主循环里 `+= (tt-t)*0.15`）；loadPreset 重置 `S.nowT=null` 并同步 `presetSelect.value`（URL `preset=N` 参数此前不同步下拉框，已修）
 
 ---
 
@@ -322,7 +348,7 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 2. ✅ commit + push 视觉修复到 feature/mvp（第一轮 ca42e5d、第三轮 740c4fd、第四轮 3da5f55 均已推送）
 3. ✅ FSM 视觉迭代（回环弧线部分缓解垂直空间问题，暂不再处理）
 4. ✅ 加 array 渲染器（2026-09-09 完成：折半查找 + 冒泡排序示例，含 swap 双弧交叉动画，见第三节 array 规范）
-5. **加 timeline 渲染器**（进程调度甘特，408 大题常客，约 200 行）
+5. ✅ 加 timeline 渲染器（2026-09-09 完成：SJF vs FCFS 进程调度甘特，含游标动画/进程分色/到达标记，见第三节 timeline 规范）
 6. **加 graph 渲染器**（路由/最短路，约 200 行）
 7. **加 grid 渲染器**（加法器/Cache/子网，约 250 行）
 8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次；IR 规范文档 `schemas/README.md` 已备好可直接入提示词）

@@ -5,7 +5,7 @@
 ```json
 {
   "schema_version": 1,
-  "struct_type": "tree | fsm | array",
+  "struct_type": "tree | fsm | array | timeline",
   "meta": { "title": "...", "caption": "..." },
   "presets": [{ "name": "...", "steps": [...] }]
 }
@@ -61,8 +61,40 @@
 - 指针 `ptrs`：命名指针（`low` / `mid` / `high` / `i` / `j` ...），同一格多个指针自动横向错开
 - **swap 飞行动画**：相邻两步数组长度相同且恰好两个位置的值互换时，渲染器自动检测并播放双弧交叉飞行动画（元素携带旧值飞到对面，无需额外标记）
 
+## timeline
+
+甘特横道图（进程调度/磁盘调度/流水线）。**rows 全局**，**bars/markers 为 preset 级**（同一题的不同调度算法各成一个 preset，如 SJF vs FCFS）。
+
+```json
+{
+  "rows": [{ "id": "cpu", "label": "CPU" }],
+  "presets": [{
+    "name": "SJF 短作业优先",
+    "bars": [
+      { "id": "b1", "row": "cpu", "label": "P1", "start": 0, "end": 7 },
+      { "id": "b2", "row": "cpu", "label": "P3", "start": 7, "end": 8, "kind": "run" }
+    ],
+    "markers": [{ "t": 2, "label": "P2 到达" }],
+    "steps": [{
+      "reveal": 7, "active": ["b2"],
+      "title": "t=7 调度 P3", "desc": "..."
+    }]
+  }]
+}
+```
+
+- `rows`：1-4 行横道（如 `cpu`、`io`，或流水线的 IF/ID/EX/MEM/WB 各一行）
+- `bars`：每根横道的占用段，`start < end`（0-1000，可为小数）；**同一行内不允许重叠**（校验器强制，LLM 生成调度序列最易犯的错）
+  - `kind` ∈ `run`（执行/占用，按 `label` 自动分色且**跨 preset 一致**）/ `io`（I/O 琥珀色）/ `idle`（空闲灰）
+  - `label`：如 `P1`，显示在色块内；idle 可不填
+- `markers`：时刻事件（如进程到达），轴上方倒三角 + 标签，`reveal` ≥ `t` 时显示
+- `steps[].reveal`：时间游标位置（必填，0..该 preset 最大 end）——游标动画驱动 bar 从左向右生长
+- `steps[].active`：当前步骤高亮的 bar id 列表（绿色脉冲）；active 且未完成的 bar 额外显示半透明全长预览（调度已决定的区间）
+- 时间轴刻度自动生成，LLM 无需指定
+
 ## 校验规则（validate.py）
 
 - 未知字段拒收（schema 层 `additionalProperties: false`，校验器同步检查）
-- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内
-- 数组长度：array 元素 1-20，presets 1-12，steps ≤ 80
+- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中
+- 时序合法性（timeline）：同一行内 bars 不得重叠；`reveal` / `markers.t` 必须在 0..该 preset 最大 end 范围内
+- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，presets 1-12，steps ≤ 80

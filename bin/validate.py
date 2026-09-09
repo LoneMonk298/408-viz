@@ -26,7 +26,7 @@ def _walk_tree_ids(node, acc):
 
 def validate_ir(data):
     assert data.get('schema_version') == 1, 'schema_version must be 1'
-    assert data.get('struct_type') in ('tree', 'fsm', 'array'), f"unknown struct_type: {data.get('struct_type')}"
+    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline'), f"unknown struct_type: {data.get('struct_type')}"
     assert data.get('meta', {}).get('title'), 'meta.title required'
     assert data.get('presets'), 'presets required'
     t = data['struct_type']
@@ -63,6 +63,52 @@ def validate_ir(data):
                     assert ptr.get('name'), f"ptrs.name required (preset {pi} step {si})"
                     assert isinstance(ptr.get('index'), int) and 0 <= ptr['index'] < len(arr), \
                         f"ptrs.index '{ptr.get('index')}' out of range (preset {pi} step {si})"
+    elif t == 'timeline':
+        row_ids = set()
+        rows = data.get('rows', [])
+        assert 1 <= len(rows) <= 4, 'rows must be 1-4'
+        for r in rows:
+            assert r.get('id') and r.get('label'), f"rows[].id/label required ('{r.get('id')}')"
+            assert r['id'] not in row_ids, f"duplicate row id '{r['id']}'"
+            row_ids.add(r['id'])
+        for pi, p in enumerate(data['presets']):
+            assert p.get('name'), f'preset[{pi}].name required'
+            bars = p.get('bars', [])
+            assert 1 <= len(bars) <= 30, f'preset[{pi}].bars must be 1-30 items'
+            bar_ids = set()
+            by_row = {}
+            for b in bars:
+                bid = b.get('id')
+                assert bid, f'preset[{pi}].bars[].id required'
+                assert bid not in bar_ids, f"duplicate bar id '{bid}'"
+                bar_ids.add(bid)
+                assert b.get('row') in row_ids, f"bar '{bid}' row '{b.get('row')}' not in rows"
+                assert b.get('kind', 'run') in ('run', 'io', 'idle'), f"bar '{bid}' kind invalid"
+                try:
+                    st_, e_ = float(b['start']), float(b['end'])
+                except (KeyError, TypeError, ValueError):
+                    raise AssertionError(f"bar '{bid}' start/end must be numbers")
+                assert 0 <= st_ < e_ <= 1000, f"bar '{bid}' needs 0 <= start < end <= 1000"
+                by_row.setdefault(b['row'], []).append((st_, e_, bid))
+            for rid, bs in by_row.items():
+                bs.sort()
+                for i in range(1, len(bs)):
+                    assert bs[i][0] >= bs[i - 1][1] - 1e-9, \
+                        f"bars '{bs[i - 1][2]}' and '{bs[i][2]}' overlap in row '{rid}' (preset {pi})"
+            max_end = max(e for _, e, _ in (b for bs in by_row.values() for b in bs))
+            for m in p.get('markers', []):
+                assert isinstance(m.get('t'), (int, float)), f"markers[].t must be a number (preset {pi})"
+                assert 0 <= m['t'] <= max_end, \
+                    f"markers[].t '{m['t']}' out of range 0..{max_end} (preset {pi})"
+            for si, s in enumerate(p['steps']):
+                assert s.get('title'), f'preset[{pi}].steps[{si}].title required'
+                assert s.get('desc') is not None, f'preset[{pi}].steps[{si}].desc required'
+                assert isinstance(s.get('reveal'), (int, float)), \
+                    f"steps[{si}].reveal must be a number (preset {pi})"
+                assert 0 <= s['reveal'] <= max_end, \
+                    f"steps[{si}].reveal '{s['reveal']}' out of range 0..{max_end} (preset {pi})"
+                for aid in s.get('active', []):
+                    assert aid in bar_ids, f"active '{aid}' not in bars (preset {pi} step {si})"
     elif t == 'fsm':
         state_ids = {s['id'] for s in data['states']}
         trans_ids = {tr['id'] for tr in data['transitions'] if tr.get('id')}

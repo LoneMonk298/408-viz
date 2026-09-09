@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "struct_type": "timeline",
+  "meta": {
+    "title": "进程调度：SJF vs FCFS",
+    "caption": "非抢占式短作业优先 与 先来先服务 对比（经典 4 进程例题）"
+  },
+  "rows": [
+    { "id": "cpu", "label": "CPU" }
+  ],
+  "presets": [
+    {
+      "name": "SJF 短作业优先",
+      "bars": [
+        { "id": "b1", "row": "cpu", "label": "P1", "start": 0, "end": 7 },
+        { "id": "b2", "row": "cpu", "label": "P3", "start": 7, "end": 8 },
+        { "id": "b3", "row": "cpu", "label": "P2", "start": 8, "end": 12 },
+        { "id": "b4", "row": "cpu", "label": "P4", "start": 12, "end": 16 }
+      ],
+      "markers": [
+        { "t": 0, "label": "P1 到达" },
+        { "t": 2, "label": "P2 到达" },
+        { "t": 4, "label": "P3 到达" },
+        { "t": 5, "label": "P4 到达" }
+      ],
+      "steps": [
+        {
+          "reveal": 0,
+          "title": "初始状态",
+          "desc": "4 个进程：`P1`(到达 0, 需 7)、`P2`(到达 2, 需 4)、`P3`(到达 4, 需 1)、`P4`(到达 5, 需 4)。SJF：每次调度时，从已到达的进程中选择服务时间最短的"
+        },
+        {
+          "reveal": 7,
+          "active": ["b1"],
+          "title": "t=0 调度 P1",
+          "desc": "t=0 时刻只有 `P1` 到达，无可选择，P1 运行 `0-7`"
+        },
+        {
+          "reveal": 8,
+          "active": ["b2"],
+          "title": "t=7 调度 P3",
+          "desc": "t=7 时 `P2`、`P3`、`P4` 均已到达且等待，最短的是 `P3`(仅需 1)，P3 运行 `7-8`"
+        },
+        {
+          "reveal": 12,
+          "active": ["b3"],
+          "title": "t=8 调度 P2",
+          "desc": "t=8 时 `P2` 与 `P4` 各需 4，服务时间相同按到达先后（P2 先到），P2 运行 `8-12`"
+        },
+        {
+          "reveal": 16,
+          "active": ["b4"],
+          "title": "t=12 调度 P4",
+          "desc": "最后 `P4` 运行 `12-16`，调度完成"
+        },
+        {
+          "reveal": 16,
+          "title": "性能分析",
+          "desc": "周转时间：P1=7、P3=4、P2=10、P4=11，平均 `8`；等待时间：0、3、6、7，平均 `4`"
+        }
+      ]
+    },
+    {
+      "name": "FCFS 先来先服务",
+      "bars": [
+        { "id": "c1", "row": "cpu", "label": "P1", "start": 0, "end": 7 },
+        { "id": "c2", "row": "cpu", "label": "P2", "start": 7, "end": 11 },
+        { "id": "c3", "row": "cpu", "label": "P3", "start": 11, "end": 12 },
+        { "id": "c4", "row": "cpu", "label": "P4", "start": 12, "end": 16 }
+      ],
+      "markers": [
+        { "t": 0, "label": "P1 到达" },
+        { "t": 2, "label": "P2 到达" },
+        { "t": 4, "label": "P3 到达" },
+        { "t": 5, "label": "P4 到达" }
+      ],
+      "steps": [
+        {
+          "reveal": 0,
+          "title": "初始状态",
+          "desc": "同一组进程，FCFS 规则：按到达先后依次调度，不考虑服务时间长短"
+        },
+        {
+          "reveal": 7,
+          "active": ["c1"],
+          "title": "P1 运行 0-7",
+          "desc": "`P1` 最先到达（t=0），运行 `0-7`"
+        },
+        {
+          "reveal": 11,
+          "active": ["c2"],
+          "title": "P2 运行 7-11",
+          "desc": "`P2`(t=2 到达) 是最早等待者，运行 `7-11`"
+        },
+        {
+          "reveal": 12,
+          "active": ["c3"],
+          "title": "P3 运行 11-12",
+          "desc": "`P3` 虽只需 1 个时间单位，但必须等 `P2` 完成，运行 `11-12`"
+        },
+        {
+          "reveal": 16,
+          "active": ["c4"],
+          "title": "P4 运行 12-16",
+          "desc": "`P4` 最后，运行 `12-16`，调度完成"
+        },
+        {
+          "reveal": 16,
+          "title": "性能分析",
+          "desc": "周转时间：P1=7、P2=9、P3=8、P4=11，平均 `8.75`；等待时间：0、5、7、7，平均 `4.75`。对比 SJF（平均周转 8）：短作业优先平均周转时间更短"
+        }
+      ]
+    }
+  ]
+}
