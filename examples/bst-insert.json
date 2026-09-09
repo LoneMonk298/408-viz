@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "struct_type": "tree",
+  "meta": {
+    "title": "BST 插入：7, 3, 5, 9",
+    "caption": "向空二叉搜索树依次插入 7、3、5、9"
+  },
+  "presets": [
+    {
+      "name": "BST 插入 7→3→5→9",
+      "steps": [
+        {
+          "tree": { "id": "n7", "val": 7 },
+          "hl": [{ "node_id": "n7", "kind": "insert" }],
+          "title": "插入 7",
+          "desc": "空树，7 成为根结点"
+        },
+        {
+          "tree": {
+            "id": "n7", "val": 7,
+            "children": [{ "id": "n3", "val": 3 }]
+          },
+          "hl": [
+            { "node_id": "n7", "kind": "visit" },
+            { "node_id": "n3", "kind": "insert" }
+          ],
+          "title": "插入 3",
+          "desc": "3 < 7，作为 7 的左子结点"
+        },
+        {
+          "tree": {
+            "id": "n7", "val": 7,
+            "children": [{
+              "id": "n3", "val": 3,
+              "children": [{ "id": "n5", "val": 5 }]
+            }]
+          },
+          "hl": [
+            { "node_id": "n7", "kind": "visit" },
+            { "node_id": "n3", "kind": "visit" },
+            { "node_id": "n5", "kind": "insert" }
+          ],
+          "title": "插入 5",
+          "desc": "5 > 7？否；5 > 3，作为 3 的右子结点"
+        },
+        {
+          "tree": {
+            "id": "n7", "val": 7,
+            "children": [
+              { "id": "n3", "val": 3, "children": [{ "id": "n5", "val": 5 }] },
+              { "id": "n9", "val": 9 }
+            ]
+          },
+          "hl": [
+            { "node_id": "n7", "kind": "visit" },
+            { "node_id": "n9", "kind": "insert" }
+          ],
+          "title": "插入 9",
+          "desc": "9 > 7，作为 7 的右子结点"
+        }
+      ]
+    }
+  ]
+}

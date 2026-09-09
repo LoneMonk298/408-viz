@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "struct_type": "fsm",
+  "meta": {
+    "title": "2 位二进制计数器状态机",
+    "caption": "每来一个时钟脉冲，计数器在 S0→S1→S2→S3→S0 间循环"
+  },
+  "states": [
+    { "id": "S0", "type": "start", "label": "00", "sublabel": "S0", "col": 0 },
+    { "id": "S1", "type": "active", "label": "01", "sublabel": "S1", "col": 1 },
+    { "id": "S2", "type": "active", "label": "10", "sublabel": "S2", "col": 2 },
+    { "id": "S3", "type": "active", "label": "11", "sublabel": "S3", "col": 3 }
+  ],
+  "transitions": [
+    { "id": "t01", "from": "S0", "to": "S1", "label": "clk↑" },
+    { "id": "t12", "from": "S1", "to": "S2", "label": "clk↑" },
+    { "id": "t23", "from": "S2", "to": "S3", "label": "clk↑" },
+    { "id": "t30", "from": "S3", "to": "S0", "label": "clk↑ 溢出" }
+  ],
+  "presets": [
+    {
+      "name": "4 个时钟脉冲：00→11",
+      "steps": [
+        {
+          "active": ["S0"],
+          "lastTrans": [],
+          "title": "初态：S0 = 00",
+          "desc": "计数器复位后处于状态 S0，输出 Q1Q0 = 00"
+        },
+        {
+          "active": ["S1"],
+          "lastTrans": [{"id": "t01"}],
+          "title": "第 1 个 clk↑",
+          "desc": "触发边沿到达，S0 → S1，输出变为 01"
+        },
+        {
+          "active": ["S2"],
+          "lastTrans": [{"id": "t12"}],
+          "title": "第 2 个 clk↑",
+          "desc": "S1 → S2，输出 10"
+        },
+        {
+          "active": ["S3"],
+          "lastTrans": [{"id": "t23"}],
+          "title": "第 3 个 clk↑",
+          "desc": "S2 → S3，输出 11"
+        },
+        {
+          "active": ["S0"],
+          "lastTrans": [{"id": "t30"}],
+          "title": "第 4 个 clk↑（溢出）",
+          "desc": "S3 → S0，计数器回绕，产生进位/溢出信号"
+        }
+      ]
+    }
+  ]
+}

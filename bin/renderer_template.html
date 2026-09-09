@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>408-Viz</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: transparent;
+  --card: #ffffff;
+  --primary: #2f9e44;
+  --primary-d: #2b8a3e;
+  --primary-soft: #d3f9d8;
+  --text: #343a40;
+  --text-2: #868e96;
+  --border: #e9ecef;
+  --shadow: 0 2px 10px rgba(0,0,0,0.07);
+  --radius: 10px;
+  --success: #40c057;
+  --warning: #fab005;
+  --danger:  #fa5252;
+  --info:    #228be6;
+  --purple:  #be4bdb;
+}
+html.dark {
+  --card: #1e1e20;
+  --text: #e9ecef;
+  --text-2: #adb5bd;
+  --border: #3a3d44;
+  --shadow: 0 2px 10px rgba(0,0,0,0.3);
+  --primary-soft: rgba(47,158,68,0.2);
+}
+body {
+  background: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+/* ===== Toolbar ===== */
+.toolbar {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+.toolbar__title {
+  font-weight: 700; font-size: 14px;
+  color: var(--primary); white-space: nowrap;
+}
+.select {
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  background: var(--card);
+  color: var(--text);
+  max-width: 260px;
+  cursor: pointer;
+}
+.ctrl-group { display: flex; gap: 8px; align-items: center; }
+.ctrl-btn {
+  border: none;
+  width: 36px; height: 36px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  background: var(--border);
+  color: var(--text);
+}
+.ctrl-btn:hover:not(:disabled) { opacity: 0.85; }
+.ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ctrl-btn.play {
+  background: var(--primary);
+  color: #fff;
+  width: 44px; height: 36px;
+  font-size: 14px;
+}
+.ctrl-btn.play:hover { background: var(--primary-d); }
+.speed-control {
+  display: flex; align-items: center; gap: 6px; margin-left: 6px;
+}
+.speed-control label {
+  font-size: 12px; color: var(--text-2); white-space: nowrap;
+}
+.speed-control input[type=range] { width: 80px; cursor: pointer; }
+.speed-val {
+  font-size: 11px; color: var(--text-2); min-width: 28px;
+}
+/* ===== Stage ===== */
+.stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+}
+/* ===== Legend ===== */
+.legend-float {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: 60%;
+  z-index: 3;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 4px;
+  color: var(--text);
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  border: 2px solid var(--primary);
+  display: inline-block;
+}
+/* ===== Step overlay ===== */
+.step-overlay {
+  position: absolute;
+  left: 14px; right: 14px; bottom: 14px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  z-index: 3;
+}
+.step-overlay__num {
+  display: inline-block;
+  background: var(--success);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.step-overlay__body {
+  flex: 1;
+  min-width: 0;
+}
+.step-overlay__title {
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.step-overlay__desc {
+  color: var(--text-2);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.step-overlay__desc code {
+  background: var(--primary-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  color: var(--primary-d);
+}
+.step-overlay__desc .code {
+  background: var(--primary-soft);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  color: var(--primary-d);
+}
+/* mobile */
+@media (max-width: 640px) {
+  .step-overlay { font-size: 12px; padding: 8px 10px; }
+  .legend-float { font-size: 10px; padding: 4px 6px; gap: 6px; max-width: 90%; }
+  .toolbar { padding: 6px 10px; gap: 6px 10px; }
+  .toolbar__title { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toolbar__title" id="title">408-Viz</div>
+  <select id="presetSelect" class="select"></select>
+  <div class="ctrl-group">
+    <button class="ctrl-btn" id="resetBtn" title="重置 (R)">&#8634;</button>
+    <button class="ctrl-btn" id="prevBtn" title="上一步 (←)">&#9664;</button>
+    <button class="ctrl-btn play" id="playBtn" title="播放/暂停 (空格)">&#9654;</button>
+    <button class="ctrl-btn" id="nextBtn" title="下一步 (→)">&#9654;</button>
+    <div class="speed-control">
+      <label>速度</label>
+      <input type="range" id="speedSlider" min="0.5" max="2.5" step="0.5" value="0.5">
+      <span class="speed-val" id="speedValue">0.5x</span>
+    </div>
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <canvas id="canvas"></canvas>
+  <div class="legend-float" id="legend"></div>
+  <div class="step-overlay" id="stepOverlay">
+    <span class="step-overlay__num" id="overlayNum"></span>
+    <div class="step-overlay__body">
+      <div class="step-overlay__title" id="overlayTitle"></div>
+      <div class="step-overlay__desc" id="overlayDesc"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== IR 数据（由 render.py 注入）=====
+const IR = /*__IR__*/null;
+
+// ===== 通用工具 =====
+const $ = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// 主题判定：只检查 .dark 类
+function isDark() {
+  return document.documentElement.classList.contains('dark');
+}
+
+// 父组件主题同步消息
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'viz-theme') {
+    document.documentElement.classList.toggle('dark', !!e.data.dark);
+  }
+});
+// 初始系统偏好兜底
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark');
+}
+
+// ===== 颜色配置（高亮 kind → 颜色）=====
+const HL_COLORS = {
+  insert:    { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.18)' },
+  visit:     { fill: '#228be6', stroke: '#1c7ed6', fillSoft: 'rgba(34,139,230,0.18)' },
+  compare:   { fill: '#f59f00', stroke: '#e8590c', fillSoft: 'rgba(245,159,0,0.18)' },
+  unbalanced:{ fill: '#fab005', stroke: '#f59f00', fillSoft: 'rgba(250,176,5,0.25)' },
+  rotated:   { fill: '#be4bdb', stroke: '#9c36b5', fillSoft: 'rgba(190,75,219,0.18)' },
+  removed:   { fill: '#fa5252', stroke: '#e03131', fillSoft: 'rgba(250,82,82,0.22)' },
+};
+const LEGEND = {
+  insert:    '新插入',
+  visit:     '查找路径',
+  compare:   '比较',
+  unbalanced:'失衡根',
+  rotated:   '旋转结点',
+  removed:   '摘出结点',
+};
+
+// ===== 状态 =====
+const S = {
+  steps: [],
+  currentStep: -1,
+  playing: false,
+  timer: null,
+  speed: 0.5,
+  presetIdx: 0,
+  display: {},   // 节点动画显示状态
+  treePos: {},   // 目标布局位置
+};
+
+// ===== URL 参数 =====
+function getUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    preset: p.has('preset') ? parseInt(p.get('preset'), 10) : null,
+    autoplay: p.has('autoplay') ? p.get('autoplay') === '1' : true,
+    speed: p.has('speed') ? parseFloat(p.get('speed')) : null,
+    hidelegend: p.get('hidelegend') === '1',
+  };
+}
+
+// ===== Canvas 准备 =====
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(r.width * dpr));
+  canvas.height = Math.max(1, Math.floor(r.height * dpr));
+}
+window.addEventListener('resize', () => { resizeCanvas(); draw(0); });
+
+// ===== 布局：树 =====
+function computeTreeLayout(root, w, h) {
+  if (!root) return { nodes: [], rootX: w/2, rootY: 60, gapX: 80, r: 16 };
+  // 中序遍历
+  const ordered = [];
+  (function inorder(n) {
+    if (!n) return;
+    inorder(n.children && n.children[0]);
+    ordered.push(n);
+    inorder(n.children && n.children[1]);
+  })(root);
+  const n = ordered.length || 1;
+  const gapX = clamp(w / (n + 1), 40, 110);
+  const r = clamp(gapX * 0.32, 12, 22);
+  // 中序 x 坐标
+  const inorderX = {};
+  ordered.forEach((node, i) => { inorderX[node.id] = (i + 1) * gapX; });
+  // 深度
+  const depth = {};
+  (function walk(n, d) {
+    if (!n) return;
+    depth[n.id] = d;
+    (n.children || []).forEach(c => walk(c, d + 1));
+  })(root, 0);
+  // y 坐标：等层距
+  const maxDepth = Object.values(depth).reduce((a, b) => Math.max(a, b), 0) || 1;
+  const topPad = 70;
+  const bottomPad = 90;
+  const layerGap = clamp((h - topPad - bottomPad) / Math.max(1, maxDepth), 50, 110);
+  // 收集节点
+  const nodes = [];
+  (function collect(n) {
+    if (!n) return;
+    nodes.push({
+      id: n.id,
+      val: n.val,
+      x: inorderX[n.id],
+      y: topPad + depth[n.id] * layerGap,
+      r: r,
+      children: (n.children || []).map(c => c.id),
+    });
+    (n.children || []).forEach(collect);
+  })(root);
+  return { nodes, layerGap, r };
+}
+
+// ===== 布局：FSM =====
+function computeFSMLayout(states, w, h) {
+  const cols = {};
+  states.forEach(s => { (cols[s.col] = cols[s.col] || []).push(s); });
+  const colCount = Math.max(...Object.keys(cols).map(Number)) + 1;
+  const colW = w / Math.max(1, colCount);
+  const rowGap = clamp(h / 3, 100, 160);
+  const topPad = 80;
+  const nodes = [];
+  Object.keys(cols).forEach(col => {
+    cols[col].forEach((s, row) => {
+      nodes.push({
+        id: s.id,
+        type: s.type,
+        label: s.label,
+        sublabel: s.sublabel,
+        x: col * colW + colW/2,
+        y: topPad + row * rowGap + rowGap/2,
+        r: 34,
+      });
+    });
+  });
+  return { nodes, colW };
+}
+
+// ===== 应用步骤 =====
+function applyStep(idx) {
+  if (idx < 0 || idx >= S.steps.length) return;
+  S.currentStep = idx;
+  const st = S.steps[idx];
+  // 字幕
+  $('overlayNum').textContent = `步骤 ${idx+1}/${S.steps.length}`;
+  $('overlayTitle').textContent = st.title;
+  // 允许在 desc 中用 <code>xxx</code>
+  $('overlayDesc').innerHTML = (st.desc || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  // 按钮状态
+  $('prevBtn').disabled = idx === 0;
+  $('nextBtn').disabled = idx === S.steps.length - 1;
+  // 树布局
+  S.treePos = {};
+  if (IR.struct_type === 'tree') {
+    const r = canvas.getBoundingClientRect();
+    const lay = computeTreeLayout(st.tree, r.width, r.height);
+    S.layout = lay;
+    // 初始化 display 状态
+    lay.nodes.forEach(n => {
+      const d = S.display[n.id];
+      if (d) {
+        d.tx = n.x; d.ty = n.y; d.tval = n.val; d.ta = 1;
+      } else {
+        S.display[n.id] = {
+          x: n.x, y: n.y, a: 0, tx: n.x, ty: n.y, ta: 1,
+          val: n.val, tval: n.val, r: n.r,
+        };
+      }
+    });
+    // 高亮
+    S.hl = {};
+    (st.hl || []).forEach(h => { S.hl[h.node_id] = h.kind; });
+  } else if (IR.struct_type === 'fsm') {
+    const r = canvas.getBoundingClientRect();
+    const lay = computeFSMLayout(IR.states, r.width, r.height);
+    S.layout = lay;
+    // 初始化 display
+    lay.nodes.forEach(n => {
+      if (!S.display[n.id]) {
+        S.display[n.id] = { x: n.x, y: n.y, a: 0.6, tx: n.x, ty: n.y, ta: 0.6, r: n.r };
+      }
+    });
+    // 当前 active 高亮
+    S.hl = {};
+    (st.active || []).forEach(id => { S.hl[id] = 'insert'; });
+    S.lastTrans = new Set((st.lastTrans || []).map(t => t.id));
+  }
+}
+
+// ===== 绘制 =====
+function draw(ts) {
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvas.width/dpr, canvas.height/dpr);
+  if (!S.layout || !S.steps.length) return;
+
+  // 动画插值
+  for (const id in S.display) {
+    const d = S.display[id];
+    d.x += (d.tx - d.x) * 0.18;
+    d.y += (d.ty - d.y) * 0.18;
+    d.a += (d.ta - d.a) * 0.22;
+  }
+
+  if (IR.struct_type === 'tree') drawTree(ts);
+  else if (IR.struct_type === 'fsm') drawFSM(ts);
+}
+
+// ===== 树渲染 =====
+function drawTree(ts) {
+  const dark = isDark();
+  const baseFill = dark ? '#252527' : '#ffffff';
+  const baseStroke = dark ? '#5c5f66' : '#c1c6cc';
+  const edgeColor = dark ? '#3a3d44' : '#dee2e6';
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const nodes = S.layout.nodes;
+
+  // 画边
+  ctx.lineWidth = 2;
+  nodes.forEach(n => {
+    (n.children || []).forEach(cid => {
+      const child = S.display[cid];
+      if (child) {
+        ctx.strokeStyle = edgeColor;
+        ctx.beginPath();
+        ctx.moveTo(n.x, n.y + n.r);
+        ctx.lineTo(child.x, child.y - child.r);
+        ctx.stroke();
+      }
+    });
+  });
+
+  // 画节点
+  nodes.forEach(n => {
+    const d = S.display[n.id];
+    if (!d) return;
+    let fill = baseFill, stroke = baseStroke, pulse = false;
+    const kind = S.hl[n.id];
+    if (kind && HL_COLORS[kind]) {
+      fill = HL_COLORS[kind].fillSoft;
+      stroke = HL_COLORS[kind].stroke;
+      pulse = (kind === 'insert' || kind === 'unbalanced' || kind === 'rotated');
+    }
+    const rr = d.r * (pulse ? (1 + 0.06 * Math.sin(ts / 180)) : 1);
+    ctx.save();
+    ctx.globalAlpha = clamp(d.a, 0, 1);
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, rr, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    // 文本
+    ctx.fillStyle = textColor;
+    ctx.font = `600 ${Math.floor(rr * 0.8)}px -apple-system, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(n.val), d.x, d.y);
+    ctx.restore();
+  });
+}
+
+// ===== FSM 渲染 =====
+function drawFSM(ts) {
+  const dark = isDark();
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const edgeColor = dark ? '#3a3d44' : '#dee2e6';
+  const nodes = S.layout.nodes;
+
+  // 边
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = edgeColor;
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  IR.transitions.forEach(tr => {
+    const a = nodes.find(n => n.id === tr.from);
+    const b = nodes.find(n => n.id === tr.to);
+    if (!a || !b) return;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx/dist, uy = dy/dist;
+    const x1 = a.x + ux * a.r, y1 = a.y + uy * a.r;
+    const x2 = b.x - ux * b.r, y2 = b.y - uy * b.r;
+    const hl = S.lastTrans && S.lastTrans.has(tr.id);
+    if (hl) {
+      ctx.strokeStyle = '#40c057';
+      ctx.lineWidth = 3;
+    } else {
+      ctx.strokeStyle = edgeColor;
+      ctx.lineWidth = 1.5;
+    }
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // 箭头
+    const ah = 7;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux*ah - uy*ah*0.5, y2 - uy*ah + ux*ah*0.5);
+    ctx.lineTo(x2 - ux*ah + uy*ah*0.5, y2 - uy*ah - ux*ah*0.5);
+    ctx.closePath();
+    ctx.fillStyle = hl ? '#40c057' : edgeColor;
+    ctx.fill();
+    // label
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    const lbl = tr.label || '';
+    if (lbl) {
+      const w = ctx.measureText(lbl).width + 8;
+      ctx.fillStyle = dark ? '#1e1e20' : '#ffffff';
+      ctx.fillRect(mx - w/2, my - 9, w, 18);
+      ctx.fillStyle = hl ? '#40c057' : textColor;
+      ctx.fillText(lbl, mx, my);
+    }
+  });
+
+  // 节点
+  nodes.forEach(n => {
+    const d = S.display[n.id];
+    if (!d) return;
+    let fill = dark ? '#252527' : '#ffffff';
+    let stroke = dark ? '#5c5f66' : '#c1c6cc';
+    const active = S.hl[n.id];
+    if (active) {
+      fill = HL_COLORS[active].fillSoft;
+      stroke = HL_COLORS[active].stroke;
+    } else if (n.type === 'start') {
+      stroke = '#228be6';
+    } else if (n.type === 'success') {
+      stroke = '#40c057';
+    } else if (n.type === 'failure' || n.type === 'terminal') {
+      stroke = '#fa5252';
+    }
+    ctx.save();
+    ctx.globalAlpha = clamp(d.a, 0, 1);
+    // 圆
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    // 标签
+    ctx.fillStyle = textColor;
+    ctx.font = `600 12px -apple-system, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, d.x, d.y);
+    if (n.sublabel) {
+      ctx.font = `10px -apple-system, sans-serif`;
+      ctx.fillStyle = dark ? '#adb5bd' : '#868e96';
+      ctx.fillText(n.sublabel, d.x, d.y + d.r + 14);
+    }
+    ctx.restore();
+  });
+}
+
+// ===== 图例 =====
+function renderLegend() {
+  const legend = $('legend');
+  const kinds = Object.keys(LEGEND);
+  // tree 显示所有相关 kind；fsm 只显示 insert（active）
+  let showKinds = kinds;
+  if (IR.struct_type === 'fsm') showKinds = ['insert'];
+  legend.innerHTML = showKinds
+    .map(k => `<div class="legend-item">
+      <span class="legend-dot" style="background:${HL_COLORS[k].fillSoft};border-color:${HL_COLORS[k].stroke}"></span>
+      ${LEGEND[k]}
+    </div>`).join('');
+  if (getUrlParams().hidelegend) legend.style.display = 'none';
+}
+
+// ===== 动画主循环 =====
+function frame(ts) {
+  draw(ts);
+  requestAnimationFrame(frame);
+}
+
+// ===== 播放控制 =====
+function stepDur() { return 1500 / S.speed; }
+function play() {
+  if (S.playing) return;
+  if (S.currentStep >= S.steps.length - 1) applyStep(0);
+  S.playing = true;
+  $('playBtn').innerHTML = '&#10074;&#10074;';
+  tick();
+}
+function tick() {
+  if (!S.playing) return;
+  if (S.currentStep >= S.steps.length - 1) { pause(); return; }
+  S.timer = setTimeout(() => {
+    applyStep(S.currentStep + 1);
+    tick();
+  }, stepDur());
+}
+function pause() {
+  S.playing = false;
+  if (S.timer) { clearTimeout(S.timer); S.timer = null; }
+  $('playBtn').innerHTML = '&#9654;';
+}
+function stepTo(idx) {
+  pause();
+  applyStep(clamp(idx, 0, S.steps.length - 1));
+}
+
+// ===== 加载预设 =====
+function loadPreset(idx) {
+  pause();
+  S.presetIdx = idx;
+  S.steps = IR.presets[idx].steps;
+  S.currentStep = -1;
+  S.display = {};
+  applyStep(0);
+}
+
+// ===== 初始化 =====
+function init() {
+  const params = getUrlParams();
+  $('title').textContent = IR.meta.title;
+  if (IR.meta.caption) {
+    $('title').innerHTML += `<span style="font-weight:400;color:var(--text-2);margin-left:8px;font-size:12px">${IR.meta.caption}</span>`;
+  }
+  // 预设下拉
+  const sel = $('presetSelect');
+  IR.presets.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', e => loadPreset(parseInt(e.target.value, 10)));
+  // 按钮
+  $('resetBtn').onclick = () => { pause(); applyStep(0); };
+  $('prevBtn').onclick = () => stepTo(S.currentStep - 1);
+  $('nextBtn').onclick = () => stepTo(S.currentStep + 1);
+  $('playBtn').onclick = () => S.playing ? pause() : play();
+  // 速度
+  const slider = $('speedSlider'), val = $('speedValue');
+  slider.value = params.speed || 0.5;
+  S.speed = parseFloat(slider.value);
+  val.textContent = S.speed + 'x';
+  slider.addEventListener('input', () => {
+    S.speed = parseFloat(slider.value);
+    val.textContent = S.speed + 'x';
+  });
+  // 键盘
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'ArrowLeft') stepTo(S.currentStep - 1);
+    else if (e.key === 'ArrowRight') stepTo(S.currentStep + 1);
+    else if (e.key === ' ') { e.preventDefault(); S.playing ? pause() : play(); }
+    else if (e.key === 'r' || e.key === 'R') { pause(); applyStep(0); }
+  });
+  // 图例
+  renderLegend();
+  // 画布
+  resizeCanvas();
+  // 选预设
+  const pIdx = (params.preset != null && params.preset >= 0 && params.preset < IR.presets.length)
+    ? params.preset : 0;
+  loadPreset(pIdx);
+  // 自动播放
+  if (params.autoplay) setTimeout(play, 400);
+  // 动画循环
+  requestAnimationFrame(frame);
+}
+
+init();
+</script>
+</body>
+</html>
