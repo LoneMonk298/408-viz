@@ -4,8 +4,7 @@
 **项目位置**：
 - 服务器：`hermes@192.168.0.1:~/408-viz/`（git 仓库已 init，remote origin 已配 GitHub token）
 - GitHub：`https://github.com/LoneMonk298/408-viz`（public，default_branch=main）
-- 分支：`main`（空占位 commit `1ae51c9`）、`feature/mvp`（MVP 全部代码 commit `4f48c76`）
-- ⚠️ 视觉修复**尚未 commit**，服务器上是旧版渲染器
+- 分支：`main`（空占位 commit `1ae51c9`）、`feature/mvp`（MVP `4f48c76` + 第一轮视觉修复 `ca42e5d` + 第二轮渲染 bug 修复）
 
 **沙箱位置**：`/opt/data/408-viz/`（沙箱与服务器**不共享**，每次需重新 tar 同步到服务器）
 
@@ -149,7 +148,9 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 
 ---
 
-## 五、已完成的视觉修复（⚠️ 未 commit）
+## 五、已完成的视觉修复
+
+### 第一轮（2026-09-09，commit ca42e5d）
 
 ### 问题
 
@@ -181,12 +182,25 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 | tree step3（4节点） | `[37,54,854,470]` | `[36,54,861,470]` |
 | fsm 全步骤 | `[44,222,854,308]`（高 86） | `[44,222,854,308]`（同，但更接近中心）|
 
-### ⚠️ 未解决/需评估
+### 第二轮修复（2026-09-09，本地评估发现 3 个 bug，全部修复）
 
-fsm 的 4 个状态在 `col:0,1,2,3` 横向排开，本来就该是横线。但视觉上"挤中间"——canvas 高 510 浪费了大量垂直空间。**如果视觉上还是不满意，可以考虑**：
-- 让 FSM 节点垂直分布（不再一行）
-- 或者按 col 数动态调整 canvas 高度
-- 或者增加 sublabel 的视觉重量，让单行 FSM 更"满"
+评估方法：本地渲染 → Playwright(Edge headless) 截图 + bbox 分析 + `S.display` 程序化检查 + 截图视觉复核。
+
+1. **P0 暗色画布仍是白色**：`html.dark` 没覆盖 `--bg`（`:root` 里是 `transparent`，独立打开时透出浏览器白底，节点又是深色系，黑字白底）。修复：`html.dark { --bg: #141518 }`。
+2. **P0 FSM 回环边视觉丢失 + label 错位**：长转移（S3→S0）画直线横穿画布，被中间节点遮挡成碎线；其 label 中点恰好与相邻边 label 像素级重叠（"clk↑ 溢出"盖住了 t12 的 "clk↑"）。修复：直线距任一其他节点 < r+10 时自动改为弧线绕行（贝塞尔，回退边从下方绕、前跳长边从上方绕，同向多条依次错开 28px），label 放贝塞尔中点；顺带支持自环（`from==to`，画节点上方小弧，TCP 状态机需要）。
+3. **P2 树连线脱节 + 节点半径不更新**：连线端点用布局最终坐标而非动画坐标（节点平移时线圆脱节）；且 `S.display` 的 `r` 不随步骤更新——节点增多导致 gapX 变化时，早出现的节点永远保持旧半径（BST 根节点从 step0 的 14px 一直不涨）。修复：端点改用 `S.display` 坐标；`r` 增加 `tr` 目标值并纳入插值动画。
+
+验证数据：FSM bbox y 从 308 → 346（回环弧线占用了垂直空间）；BST 四节点半径全部收敛到 22。
+
+### FSM 垂直空间（第一轮遗留评估项）
+
+回环弧线已部分缓解（内容高度 86 → 124px）。单行 FSM 本来就该是横线，如仍不满意再考虑：节点垂直分布 / 动态 canvas 高度。
+
+### 调试环境注意（本地 Windows）
+
+- 本地已装 playwright（pip），用系统 Edge：`p.chromium.launch(channel='msedge', headless=True)`
+- `renderer_template.html` 行尾已统一为 LF（git 索引本来就是 LF，autocrlf=true）
+- Edit 工具对该文件中以注释行开头的 old_string 匹配有问题，遇到时改用 Python 锚点替换
 
 ---
 
@@ -249,9 +263,9 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 
 ## 八、待办（按优先级）
 
-1. **评估修复后的视觉效果**（你本地打开 HTML 看）
-2. **commit + push 视觉修复到 feature/mvp**
-3. **视觉迭代**（如果 FSM 还是太扁）：让 FSM 节点垂直分布 / 按 col 数动态调整 canvas 高度
+1. ✅ 评估修复后的视觉效果（2026-09-09 完成：本地截图评估，发现并修复 3 个 bug，见第五节）
+2. ✅ commit + push 视觉修复到 feature/mvp（第一轮 ca42e5d 已推送；第二轮已本地 commit）
+3. ✅ FSM 视觉迭代（回环弧线部分缓解垂直空间问题，暂不再处理）
 4. **加 array 渲染器**（排序/折半查找，最简单，约 150 行）
 5. **加 timeline 渲染器**（进程调度甘特，408 大题常客，约 200 行）
 6. **加 graph 渲染器**（路由/最短路，约 200 行）

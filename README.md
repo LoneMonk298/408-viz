@@ -45,7 +45,7 @@ python3 bin/build_all.py
 
 详见 `schemas/README.md`。
 
-## 设计原则（来自 archify）
+## 设计原则（来自 https://github.com/tt-a1i/archify）
 
 - **类型化 JSON IR**：LLM 只写 JSON，绝不写 HTML
 - **`additionalProperties: false`**：未知字段直接拒收，避免 LLM 加冗余

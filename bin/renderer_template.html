@@ -25,6 +25,7 @@
 }
 html.dark {
   --card: #1e1e20;
+  --bg: #141518;
   --text: #e9ecef;
   --text-2: #adb5bd;
   --border: #3a3d44;
@@ -415,11 +416,11 @@ function applyStep(idx) {
     lay.nodes.forEach(n => {
       const d = S.display[n.id];
       if (d) {
-        d.tx = n.x; d.ty = n.y; d.tval = n.val; d.ta = 1;
+        d.tx = n.x; d.ty = n.y; d.tval = n.val; d.ta = 1; d.tr = n.r;
       } else {
         S.display[n.id] = {
           x: n.x, y: n.y, a: 0, tx: n.x, ty: n.y, ta: 1,
-          val: n.val, tval: n.val, r: n.r,
+          val: n.val, tval: n.val, r: n.r, tr: n.r,
         };
       }
     });
@@ -433,7 +434,7 @@ function applyStep(idx) {
     // 初始化 display
     lay.nodes.forEach(n => {
       if (!S.display[n.id]) {
-        S.display[n.id] = { x: n.x, y: n.y, a: 0.6, tx: n.x, ty: n.y, ta: 0.6, r: n.r };
+        S.display[n.id] = { x: n.x, y: n.y, a: 0.6, tx: n.x, ty: n.y, ta: 0.6, r: n.r, tr: n.r };
       }
     });
     // 当前 active 高亮
@@ -456,6 +457,7 @@ function draw(ts) {
     d.x += (d.tx - d.x) * 0.18;
     d.y += (d.ty - d.y) * 0.18;
     d.a += (d.ta - d.a) * 0.22;
+    if (d.tr != null) d.r += (d.tr - d.r) * 0.18;
   }
 
   if (IR.struct_type === 'tree') drawTree(ts);
@@ -474,12 +476,14 @@ function drawTree(ts) {
   // 画边
   ctx.lineWidth = 2;
   nodes.forEach(n => {
+    const dn = S.display[n.id];
+    if (!dn) return;
     (n.children || []).forEach(cid => {
       const child = S.display[cid];
       if (child) {
         ctx.strokeStyle = edgeColor;
         ctx.beginPath();
-        ctx.moveTo(n.x, n.y + n.r);
+        ctx.moveTo(dn.x, dn.y + dn.r);
         ctx.lineTo(child.x, child.y - child.r);
         ctx.stroke();
       }
@@ -517,6 +521,32 @@ function drawTree(ts) {
   });
 }
 
+// ===== 边绘制辅助 =====
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx*dx + dy*dy;
+  let t = len2 ? ((px-x1)*dx + (py-y1)*dy) / len2 : 0;
+  t = clamp(t, 0, 1);
+  return Math.hypot(px - (x1 + t*dx), py - (y1 + t*dy));
+}
+function drawArrowHead(x, y, ux, uy, hl, edgeColor) {
+  const ah = 7;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - ux*ah - uy*ah*0.5, y - uy*ah + ux*ah*0.5);
+  ctx.lineTo(x - ux*ah + uy*ah*0.5, y - uy*ah - ux*ah*0.5);
+  ctx.closePath();
+  ctx.fillStyle = hl ? '#40c057' : edgeColor;
+  ctx.fill();
+}
+function drawEdgeLabel(lbl, x, y, hl, dark, textColor) {
+  const w = ctx.measureText(lbl).width + 8;
+  ctx.fillStyle = dark ? '#1e1e20' : '#ffffff';
+  ctx.fillRect(x - w/2, y - 9, w, 18);
+  ctx.fillStyle = hl ? '#40c057' : textColor;
+  ctx.fillText(lbl, x, y);
+}
+
 // ===== FSM 渲染 =====
 function drawFSM(ts) {
   const dark = isDark();
@@ -524,51 +554,68 @@ function drawFSM(ts) {
   const edgeColor = dark ? '#3a3d44' : '#dee2e6';
   const nodes = S.layout.nodes;
 
-  // 边
-  ctx.lineWidth = 1.8;
-  ctx.strokeStyle = edgeColor;
+  // 边（直线穿过其他节点时改为弧线绕行，避免遮挡与 label 重叠）
   ctx.font = '11px -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  let bowBelow = 0, bowAbove = 0; // 同向弧线依次错开
   IR.transitions.forEach(tr => {
     const a = nodes.find(n => n.id === tr.from);
     const b = nodes.find(n => n.id === tr.to);
     if (!a || !b) return;
+    const hl = S.lastTrans && S.lastTrans.has(tr.id);
+    ctx.strokeStyle = hl ? '#40c057' : edgeColor;
+    ctx.lineWidth = hl ? 3 : 1.5;
+    const lbl = tr.label || '';
+
+    if (a.id === b.id) {
+      // 自环：节点上方小弧
+      const rho = a.r * 0.6, cy0 = a.y - a.r * 0.8;
+      ctx.beginPath();
+      ctx.arc(a.x, cy0, rho, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      drawArrowHead(a.x + rho, cy0, 0, 1, hl, edgeColor);
+      if (lbl) drawEdgeLabel(lbl, a.x, cy0 - rho - 12, hl, dark, textColor);
+      return;
+    }
+
     const dx = b.x - a.x, dy = b.y - a.y;
     const dist = Math.hypot(dx, dy) || 1;
     const ux = dx/dist, uy = dy/dist;
     const x1 = a.x + ux * a.r, y1 = a.y + uy * a.r;
     const x2 = b.x - ux * b.r, y2 = b.y - uy * b.r;
-    const hl = S.lastTrans && S.lastTrans.has(tr.id);
-    if (hl) {
-      ctx.strokeStyle = '#40c057';
-      ctx.lineWidth = 3;
+    const blocked = nodes.some(n =>
+      n !== a && n !== b &&
+      distToSegment(n.x, n.y, a.x, a.y, b.x, b.y) < n.r + 10);
+
+    if (blocked) {
+      // 弧线绕行：回退边从下方绕，前跳长边从上方绕
+      const below = b.x < a.x;
+      let nx = -uy, ny = ux;
+      if (ny < 0) { nx = -nx; ny = -ny; } // 法线统一指向下方
+      const sign = below ? 1 : -1;
+      const bow = clamp(dist * 0.25, 80, 160) + (below ? bowBelow++ : bowAbove++) * 28;
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const cx = mx + nx * bow * sign, cy = my + ny * bow * sign;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.quadraticCurveTo(cx, cy, x2, y2);
+      ctx.stroke();
+      // 箭头沿曲线终点切线方向
+      let tx = x2 - cx, ty = y2 - cy;
+      const tl = Math.hypot(tx, ty) || 1;
+      drawArrowHead(x2, y2, tx / tl, ty / tl, hl, edgeColor);
+      // label 放贝塞尔中点（弧线最低/最高处）
+      if (lbl) drawEdgeLabel(lbl,
+        0.25*x1 + 0.5*cx + 0.25*x2, 0.25*y1 + 0.5*cy + 0.25*y2,
+        hl, dark, textColor);
     } else {
-      ctx.strokeStyle = edgeColor;
-      ctx.lineWidth = 1.5;
-    }
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    // 箭头
-    const ah = 7;
-    ctx.beginPath();
-    ctx.moveTo(x2, y2);
-    ctx.lineTo(x2 - ux*ah - uy*ah*0.5, y2 - uy*ah + ux*ah*0.5);
-    ctx.lineTo(x2 - ux*ah + uy*ah*0.5, y2 - uy*ah - ux*ah*0.5);
-    ctx.closePath();
-    ctx.fillStyle = hl ? '#40c057' : edgeColor;
-    ctx.fill();
-    // label
-    const mx = (x1+x2)/2, my = (y1+y2)/2;
-    const lbl = tr.label || '';
-    if (lbl) {
-      const w = ctx.measureText(lbl).width + 8;
-      ctx.fillStyle = dark ? '#1e1e20' : '#ffffff';
-      ctx.fillRect(mx - w/2, my - 9, w, 18);
-      ctx.fillStyle = hl ? '#40c057' : textColor;
-      ctx.fillText(lbl, mx, my);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      drawArrowHead(x2, y2, ux, uy, hl, edgeColor);
+      if (lbl) drawEdgeLabel(lbl, (x1 + x2) / 2, (y1 + y2) / 2, hl, dark, textColor);
     }
   });
 
