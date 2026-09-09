@@ -5,7 +5,7 @@
 ```json
 {
   "schema_version": 1,
-  "struct_type": "tree | fsm | array | timeline | graph",
+  "struct_type": "tree | fsm | array | timeline | graph | grid",
   "meta": { "title": "...", "caption": "..." },
   "presets": [{ "name": "...", "steps": [...] }]
 }
@@ -128,9 +128,41 @@
 - 边高亮 `edge_hl`，kind ∈ `relax`（松弛/考察中，琥珀粗线）/ `tree`（树边/已选中，绿粗线）/ `path`（路径边，紫粗线）
 - `vals`：节点下方数值徽章（dist / 深度 / 访问序号等），字符串或整数（`"∞"` 直接支持）——Dijkstra 的 dist 演化核心载体
 
+## grid
+
+行列网格（Cache 直接映射 / 子网划分 / 加法器 / 页表）。`rows`/`cols` 全局定义，每步是**完整单元格快照**（cells）+ 高亮（hl）。
+
+```json
+{
+  "rows": 4, "cols": 4,
+  "row_labels": ["Line 0", "Line 1", "Line 2", "Line 3"],
+  "col_labels": ["Valid", "Tag", "Set", "Data"],
+  "presets": [{
+    "name": "访问序列",
+    "steps": [{
+      "cells": [
+        { "r": 0, "c": 0, "val": "1" },
+        { "r": 0, "c": 1, "val": "10" },
+        { "r": 0, "c": 3, "val": "M[40]" }
+      ],
+      "hl": [
+        { "r": 0, "c": 0, "kind": "write" }
+      ],
+      "title": "缺失 → 装入 Line 0", "desc": "..."
+    }]
+  }]
+}
+```
+
+- `rows`/`cols`：1-12，定义网格尺寸
+- `row_labels`/`col_labels`：可选行列标题（≤16 字符）
+- `cells`：每步完整快照，只声明有值的单元格（空白格不写）。`val` 为字符串（≤12 字符）
+- `hl`：单元格高亮，kind ∈ `hit`（命中，绿色脉冲）/ `miss`（缺失，红色脉冲）/ `compare`（比较，蓝色）/ `write`（写入/装入，紫色脉冲）/ `found`（查找命中，绿色）/ `mask`（掩码位，蓝色）
+- 适用场景：Cache 行×（Valid|Tag|Data）表、IP 地址位分解、加法器进位链、页表映射
+
 ## 校验规则（validate.py）
 
 - 未知字段拒收（schema 层 `additionalProperties: false`，校验器同步检查）
-- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中；graph 的 `from/to`/`hl.node_id`/`vals.node_id` 必须在 nodes 中、`edge_hl.edge_id` 必须在 edges 中
+- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中；graph 的 `from/to`/`hl.node_id`/`vals.node_id` 必须在 nodes 中、`edge_hl.edge_id` 必须在 edges 中；grid 的 `cells.r/c` 和 `hl.r/c` 必须在 0..rows/cols 范围内
 - 时序合法性（timeline）：同一行内 bars 不得重叠；`reveal` / `markers.t` 必须在 0..该 preset 最大 end 范围内
-- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，graph nodes 2-12 / edges 1-30，presets 1-12，steps ≤ 80
+- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，graph nodes 2-12 / edges 1-30，grid rows/cols 1-12，presets 1-12，steps ≤ 80

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://408-viz.local/schemas/grid.schema.json",
+  "title": "408-Viz Grid IR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "struct_type", "meta", "rows", "cols", "presets"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "struct_type": { "const": "grid" },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "caption": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "rows": { "type": "integer", "minimum": 1, "maximum": 12 },
+    "cols": { "type": "integer", "minimum": 1, "maximum": 12 },
+    "row_labels": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 16 }
+    },
+    "col_labels": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "type": "string", "maxLength": 16 }
+    },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/preset" }
+    }
+  },
+  "$defs": {
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "steps"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "desc"],
+      "properties": {
+        "cells": {
+          "type": "array",
+          "maxItems": 144,
+          "items": { "$ref": "#/$defs/cell" }
+        },
+        "hl": {
+          "type": "array",
+          "maxItems": 144,
+          "items": { "$ref": "#/$defs/cellHighlight" }
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "desc": { "type": "string", "maxLength": 400 }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["r", "c", "val"],
+      "properties": {
+        "r": { "type": "integer", "minimum": 0, "maximum": 11 },
+        "c": { "type": "integer", "minimum": 0, "maximum": 11 },
+        "val": { "type": "string", "maxLength": 12 }
+      }
+    },
+    "cellHighlight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["r", "c", "kind"],
+      "properties": {
+        "r": { "type": "integer", "minimum": 0, "maximum": 11 },
+        "c": { "type": "integer", "minimum": 0, "maximum": 11 },
+        "kind": { "enum": ["hit", "miss", "compare", "write", "found", "mask"] }
+      }
+    }
+  }
+}

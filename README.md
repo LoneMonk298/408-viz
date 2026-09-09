@@ -6,8 +6,8 @@
 
 | 模块 | 状态 |
 |---|---|
-| IR Schema (tree / fsm / array / timeline / graph) | ✅ `schemas/*.schema.json` |
-| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠、graph 节点/边引用全检查） |
+| IR Schema (tree / fsm / array / timeline / graph / grid) | ✅ `schemas/*.schema.json` |
+| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠、graph 节点/边引用、grid 行列范围全检查） |
 | 渲染器模板（通用播放器） | ✅ `bin/renderer_template.html`（toolbar/字幕/图例/主题同步/键盘快捷键） |
 | 渲染脚本 | ✅ `bin/render.py` |
 | tree 渲染器 | ✅ tidy 布局（叶子槽位+父居中+单子方向偏移）、半径/层级自适应、脉冲高亮 |
@@ -15,7 +15,8 @@
 | array 渲染器 | ✅ 格子+下标、low/mid/high 指针、swap 双弧交叉飞行动画、8 种语义色 |
 | timeline 渲染器 | ✅ 甘特横道、时间游标动画、进程分色、到达标记、active 半透明全长预览 |
 | graph 渲染器 | ✅ 显式/圆形布局、带权边、dist 数值徽章、松弛/树边语义色、可选有向 |
-| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling`、`dijkstra-prim` |
+| grid 渲染器 | ✅ 行列网格、行列标题、单元格值快照、hit/miss/compare/write/mask 语义色 |
+| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling`、`dijkstra-prim`、`cache-direct-mapped`、`subnet-division` |
 
 ## 快速开始
 
@@ -34,7 +35,7 @@ python3 bin/build_all.py
 
 ## IR 设计
 
-五种 `struct_type`：
+六种 `struct_type`：
 
 **tree** —— 每步是完整树快照 + 高亮。`children` 位置 0=左子、1=右子，单右子用 `null` 占位
 ```json
@@ -77,6 +78,20 @@ bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一�
 ```
 节点 kind ∈ `visit/frontier/done/path/found`，边 kind ∈ `relax/tree/path`；`vals` 徽章显示 dist/深度/序号（支持 `∞`）。`x/y` 0-100 归一化坐标可选，缺省圆形自动布局。
 
+**grid** —— 行列网格（Cache/子网/加法器）。每步是完整单元格快照 + 高亮
+```json
+{ "rows": 4, "cols": 4,
+  "row_labels": ["Line 0", "Line 1", ...],
+  "col_labels": ["Valid", "Tag", "Set", "Data"],
+  "presets": [{
+    "steps": [{
+      "cells": [{ "r": 0, "c": 0, "val": "1" }, ...],
+      "hl":   [{ "r": 0, "c": 0, "kind": "write" }],
+      "title": "...", "desc": "..."
+    }] }] }
+```
+高亮 kind：`hit`（命中）/ `miss`（缺失）/ `compare`（比较）/ `write`（写入/装入）/ `found`（查找命中）/ `mask`（掩码位）。
+
 详见 `schemas/README.md`。
 
 ## 设计原则（来自 https://github.com/tt-a1i/archify）
@@ -89,6 +104,5 @@ bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一�
 
 ## 路线图
 
-- v2：加 `grid`（加法器/Cache 映射/子网划分）
-- v3：接 sensenova 的 LLM 解析器（输入题目+答案 → 生成 IR），确定性校验 + 重试
-- v4：合并到 vitepress 仓库的 `feature/408-viz` 分支，与 `<VizEmbed>` 打通
+- v2：接 sensenova 的 LLM 解析器（输入题目+答案 → 生成 IR），确定性校验 + 重试
+- v3：合并到 vitepress 仓库的 `feature/408-viz` 分支，与 `<VizEmbed>` 打通

@@ -277,6 +277,10 @@ const HL_COLORS = {
   path:      { fill: '#9c36b5', stroke: '#9c36b5', fillSoft: 'rgba(156,54,181,0.18)' },
   tree:      { fill: '#2f9e44', stroke: '#2f9e44', fillSoft: 'rgba(47,158,68,0.22)' },
   relax:     { fill: '#f59f00', stroke: '#e8590c', fillSoft: 'rgba(245,159,0,0.18)' },
+  hit:       { fill: '#40c057', stroke: '#2b8a3e', fillSoft: 'rgba(64,192,87,0.25)' },
+  miss:      { fill: '#fa5252', stroke: '#e03131', fillSoft: 'rgba(250,82,82,0.20)' },
+  write:     { fill: '#9c36b5', stroke: '#9c36b5', fillSoft: 'rgba(156,54,181,0.18)' },
+  mask:      { fill: '#1971c2', stroke: '#1971c2', fillSoft: 'rgba(25,113,194,0.22)' },
 };
 const LEGEND = {
   insert:    '新插入',
@@ -298,6 +302,10 @@ const LEGEND = {
   path:      '路径',
   tree:      '树边',
   relax:     '松弛中',
+  hit:       '命中',
+  miss:      '缺失',
+  write:     '写入',
+  mask:      '掩码',
 };
 
 // ===== 状态 =====
@@ -522,6 +530,19 @@ function computeGraphLayout(nodes, w, h) {
   return { nodes: nodeInfo, r };
 }
 
+// ===== 布局：网格（行列标题 + 自适应单元格）=====
+function computeGridLayout(rows, cols, rowLabels, colLabels, w, h) {
+  const labelW = 70, headerH = 28, padL = 60, padR = 50, padT = 64, padB = 96;
+  const gridL = padL + labelW;
+  const gridT = padT + (colLabels ? headerH : 0);
+  const availW = Math.max(80, w - gridL - padR);
+  const availH = Math.max(80, h - gridT - padB);
+  const cellW = availW / cols;
+  const cellH = clamp(availH / rows, 28, 60);
+  return { gridL, gridT, cellW, cellH, labelW, headerH, cols, rows,
+           colLabels: colLabels || [], rowLabels: rowLabels || [] };
+}
+
 // ===== 应用步骤 =====
 function applyStep(idx) {
   if (idx < 0 || idx >= S.steps.length) return;
@@ -641,6 +662,16 @@ function applyStep(idx) {
     (st.edge_hl || []).forEach(h => { S.edgeHl[h.edge_id] = h.kind; });
     S.vals = {};
     (st.vals || []).forEach(v => { S.vals[v.node_id] = String(v.val); });
+  } else if (IR.struct_type === 'grid') {
+    const r = canvas.getBoundingClientRect();
+    S.layout = computeGridLayout(
+      IR.rows || 1, IR.cols || 1, IR.row_labels || [], IR.col_labels || [],
+      r.width, r.height);
+    // cells: 每步完整快照（r/c/val），构建成 map
+    S.gridCells = {};
+    (st.cells || []).forEach(c => { S.gridCells[c.r + ',' + c.c] = String(c.val); });
+    S.hl = {};
+    (st.hl || []).forEach(h => { S.hl[h.r + ',' + h.c] = h.kind; });
   }
 }
 
@@ -666,6 +697,7 @@ function draw(ts) {
   else if (IR.struct_type === 'array') drawArray(ts);
   else if (IR.struct_type === 'timeline') drawTimeline(ts);
   else if (IR.struct_type === 'graph') drawGraph(ts);
+  else if (IR.struct_type === 'grid') drawGrid(ts);
 }
 
 // ===== 树渲染 =====
@@ -1204,6 +1236,82 @@ function drawGraph(ts) {
   });
 }
 
+// ===== 网格渲染 =====
+function drawGrid(ts) {
+  const dark = isDark();
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const dimColor = dark ? '#868e96' : '#adb5bd';
+  const gridColor = dark ? '#3a3d44' : '#dee2e6';
+  const cellFill = dark ? '#252527' : '#ffffff';
+  const lay = S.layout;
+  if (!lay) return;
+
+  // 列标题
+  if (lay.colLabels.length) {
+    ctx.font = '600 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    lay.colLabels.forEach((label, ci) => {
+      const cx = lay.gridL + ci * lay.cellW + lay.cellW / 2;
+      const cy = lay.gridT - lay.headerH / 2 - 4;
+      ctx.fillStyle = dimColor;
+      ctx.fillText(label, cx, cy);
+    });
+  }
+
+  // 行标题
+  if (lay.rowLabels.length) {
+    ctx.font = '600 11px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    lay.rowLabels.forEach((label, ri) => {
+      const cy = lay.gridT + ri * lay.cellH + lay.cellH / 2;
+      ctx.fillStyle = dimColor;
+      ctx.fillText(label, lay.gridL - 8, cy);
+    });
+  }
+
+  // 单元格
+  for (let ri = 0; ri < lay.rows; ri++) {
+    for (let ci = 0; ci < lay.cols; ci++) {
+      const x = lay.gridL + ci * lay.cellW;
+      const y = lay.gridT + ri * lay.cellH;
+      const key = ri + ',' + ci;
+      const kind = S.hl[key];
+      let fill = cellFill, stroke = gridColor, lw = 1;
+      if (kind && HL_COLORS[kind]) {
+        fill = HL_COLORS[kind].fillSoft;
+        stroke = HL_COLORS[kind].stroke;
+        lw = 2;
+      }
+      ctx.save();
+      if (kind === 'hit' || kind === 'miss' || kind === 'write') {
+        const pulse = (Math.sin(ts / 180) + 1) / 2;
+        ctx.shadowColor = HL_COLORS[kind].fill;
+        ctx.shadowBlur = 4 + 4 * pulse;
+        lw = 2.5;
+      }
+      ctx.beginPath();
+      ctx.rect(x, y, lay.cellW, lay.cellH);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.lineWidth = lw;
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+      ctx.restore();
+
+      const val = S.gridCells && S.gridCells[key];
+      if (val != null) {
+        ctx.fillStyle = textColor;
+        ctx.font = '600 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(val, x + lay.cellW / 2, y + lay.cellH / 2);
+      }
+    }
+  }
+}
+
 // ===== 图例 =====
 const LEGEND_KINDS = {
   tree: ['insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'],
@@ -1211,6 +1319,7 @@ const LEGEND_KINDS = {
   array: ['insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'found', 'removed'],
   timeline: ['run', 'io', 'idle', 'active'],
   graph: ['visit', 'frontier', 'done', 'path', 'tree', 'relax'],
+  grid: ['hit', 'miss', 'compare', 'write', 'found', 'mask'],
 };
 function renderLegend() {
   const legend = $('legend');

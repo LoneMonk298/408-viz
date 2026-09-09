@@ -40,7 +40,7 @@
 | array | ✅ 已实现（折半查找/冒泡排序，含 swap 双弧交叉动画） |
 | timeline | ✅ 已实现（SJF vs FCFS 进程调度甘特，含游标动画/进程分色） |
 | graph | ✅ 已实现（Dijkstra vs Prim，含 dist 徽章/松弛树边语义色） |
-| grid | ⏳ 待做（加法器/Cache/子网） |
+| grid | ✅ 已实现（Cache 直接映射/子网划分，含 hit/miss/write/mask 语义色） |
 
 ---
 
@@ -215,6 +215,34 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 - 校验：节点/边 id 唯一、from/to/hl/edge_hl/vals 引用、weight 非负；schema 见 `schemas/graph.schema.json`
 - 实现要点：drawArrowHead/drawEdgeLabel 已泛化为显式 color 参数（fsm 与 graph 共用）；权重标签非高亮时降为灰色（#868e96）减少完成态噪音
 
+### grid（2026-09-09 新增）
+
+行列网格（Cache 直接映射/子网划分/加法器/页表）。`rows`/`cols`/`row_labels`/`col_labels` 全局定义，每步是**完整单元格快照**（cells）+ 高亮（hl）：
+
+```json
+{
+  "schema_version": 1,
+  "struct_type": "grid",
+  "meta": { "title": "...", "caption": "..." },
+  "rows": 4, "cols": 4,
+  "row_labels": ["Line 0", "Line 1", "Line 2", "Line 3"],
+  "col_labels": ["Valid", "Tag", "Set", "Data"],
+  "presets": [{
+    "name": "访问序列",
+    "steps": [{
+      "cells": [{ "r": 0, "c": 0, "val": "1" }, { "r": 0, "c": 1, "val": "10" }],
+      "hl":   [{ "r": 0, "c": 0, "kind": "write" }],
+      "title": "...", "desc": "..."
+    }]
+  }]
+}
+```
+
+- 高亮 kind：`hit`（命中，绿脉冲）/ `miss`（缺失，红脉冲）/ `compare`（比较，蓝）/ `write`（写入/装入，紫脉冲）/ `found`（查找命中，绿）/ `mask`（掩码位，蓝）
+- cells 每步只声明有值的单元格（空白格不写）；布局自适应行列数，单元格等宽分布
+- 校验：cells/hl 的 r/c 必须在 0..rows/cols 范围内；同一 step 内不允许重复坐标；schema 见 `schemas/grid.schema.json`
+- 实现要点：`S.gridCells` 为 `r,c → val` 的 map（每步重建）；hit/miss/write 三种 kind 有脉冲光晕
+
 ---
 
 ## 四、通用播放器 UI 规范（与 viz-animation skill 对齐）
@@ -381,7 +409,7 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 4. ✅ 加 array 渲染器（2026-09-09 完成：折半查找 + 冒泡排序示例，含 swap 双弧交叉动画，见第三节 array 规范）
 5. ✅ 加 timeline 渲染器（2026-09-09 完成：SJF vs FCFS 进程调度甘特，含游标动画/进程分色/到达标记，见第三节 timeline 规范）
 6. ✅ 加 graph 渲染器（2026-09-09 完成：Dijkstra vs Prim，含 dist 徽章/松弛树边语义色/可选有向，见第三节 graph 规范）
-7. **加 grid 渲染器**（加法器/Cache/子网，约 250 行）
+7. ✅ 加 grid 渲染器（2026-09-09 完成：Cache 直接映射 + 子网划分，含 hit/miss/write/mask 语义色，见第三节 grid 规范）
 8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次；IR 规范文档 `schemas/README.md` 已备好可直接入提示词）
 9. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
 

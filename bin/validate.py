@@ -13,6 +13,7 @@ ARRAY_HL_KINDS = {'insert', 'visit', 'compare', 'swap', 'pivot', 'sorted', 'foun
 FSM_TYPES = {'start', 'active', 'success', 'failure', 'terminal'}
 GRAPH_NODE_KINDS = {'visit', 'frontier', 'done', 'path', 'found'}
 GRAPH_EDGE_KINDS = {'relax', 'tree', 'path'}
+GRID_HL_KINDS = {'hit', 'miss', 'compare', 'write', 'found', 'mask'}
 
 
 def _walk_tree_ids(node, acc):
@@ -28,7 +29,7 @@ def _walk_tree_ids(node, acc):
 
 def validate_ir(data):
     assert data.get('schema_version') == 1, 'schema_version must be 1'
-    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline', 'graph'), f"unknown struct_type: {data.get('struct_type')}"
+    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline', 'graph', 'grid'), f"unknown struct_type: {data.get('struct_type')}"
     assert data.get('meta', {}).get('title'), 'meta.title required'
     assert data.get('presets'), 'presets required'
     t = data['struct_type']
@@ -155,6 +156,36 @@ def validate_ir(data):
                     assert v.get('node_id') in node_ids, \
                         f"vals.node_id '{v.get('node_id')}' not in nodes (preset {pi} step {si})"
                     assert v.get('val') is not None, f"vals.val required (preset {pi} step {si})"
+    elif t == 'grid':
+        rows = data.get('rows', 1)
+        cols = data.get('cols', 1)
+        assert isinstance(rows, int) and 1 <= rows <= 12, 'rows must be 1-12'
+        assert isinstance(cols, int) and 1 <= cols <= 12, 'cols must be 1-12'
+        rl = data.get('row_labels', [])
+        cl = data.get('col_labels', [])
+        assert len(rl) <= rows, f'row_labels has {len(rl)} items but rows={rows}'
+        assert len(cl) <= cols, f'col_labels has {len(cl)} items but cols={cols}'
+        for pi, p in enumerate(data['presets']):
+            assert p.get('name'), f'preset[{pi}].name required'
+            for si, s in enumerate(p['steps']):
+                assert s.get('title'), f'preset[{pi}].steps[{si}].title required'
+                assert s.get('desc') is not None, f'preset[{pi}].steps[{si}].desc required'
+                seen = set()
+                for c in s.get('cells', []):
+                    key = (c.get('r'), c.get('c'))
+                    assert key not in seen, f"duplicate cell ({key}) in preset {pi} step {si}"
+                    seen.add(key)
+                    assert isinstance(c['r'], int) and 0 <= c['r'] < rows, \
+                        f"cell r={c['r']} out of range (preset {pi} step {si})"
+                    assert isinstance(c['c'], int) and 0 <= c['c'] < cols, \
+                        f"cell c={c['c']} out of range (preset {pi} step {si})"
+                    assert c.get('val') is not None, f"cell val required (preset {pi} step {si})"
+                for h in s.get('hl', []):
+                    assert isinstance(h['r'], int) and 0 <= h['r'] < rows, \
+                        f"hl r={h['r']} out of range (preset {pi} step {si})"
+                    assert isinstance(h['c'], int) and 0 <= h['c'] < cols, \
+                        f"hl c={h['c']} out of range (preset {pi} step {si})"
+                    assert h['kind'] in GRID_HL_KINDS, f"hl.kind '{h['kind']}' invalid"
     elif t == 'fsm':
         state_ids = {s['id'] for s in data['states']}
         trans_ids = {tr['id'] for tr in data['transitions'] if tr.get('id')}
