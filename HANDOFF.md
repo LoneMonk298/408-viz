@@ -410,8 +410,9 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 5. ✅ 加 timeline 渲染器（2026-09-09 完成：SJF vs FCFS 进程调度甘特，含游标动画/进程分色/到达标记，见第三节 timeline 规范）
 6. ✅ 加 graph 渲染器（2026-09-09 完成：Dijkstra vs Prim，含 dist 徽章/松弛树边语义色/可选有向，见第三节 graph 规范）
 7. ✅ 加 grid 渲染器（2026-09-09 完成：Cache 直接映射 + 子网划分，含 hit/miss/write/mask 语义色，见第三节 grid 规范）
-8. **接 sensenova LLM 解析器**（输入题目+答案 → 生成 IR，确定性校验 + 重试 1 次；IR 规范文档 `schemas/README.md` 已备好可直接入提示词）
+8. ✅ 接 sensenova LLM 解析器（2026-09-10 完成：提示词资产 + CLI 脚本，见第十节）
 9. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
+10. **实跑测试**：拿到 API key 后用真题验证 generate.py 端到端流程
 
 ### ⚠️ 教训：全量回归必须跑（2026-09-09 graph 轮发现）
 
@@ -426,3 +427,55 @@ array 轮（a1d2297）编辑 applyStep 时**误删了 fsm 分支的 S.hl/S.lastT
 - archify 核心模式：`schemas/*.schema.json` + `renderers/shared/validator.mjs` + `bin/archify.mjs validate`
 - viz-animation skill：`/opt/data/skills/software-development/viz-animation/SKILL.md`（博客可视化 UI 规范）
 - 用户博客仓库：`https://github.com/LoneMonk298/vitepress-`（最终集成目标）
+
+---
+
+## 十、LLM 解析器（v2，2026-09-10 完成）
+
+### 文件结构
+
+```
+prompts/
+  system.md              # 系统提示词（角色 + 基元选择指南 + 输出约束 + 常见错误）
+  fewshot/
+    bst-insert.txt       # Few-shot 1：BST 插入（tree 基元，展示 children/null 语义）
+    binary-search.txt    # Few-shot 2：折半查找（array 基元，展示 ptrs/hl 语义）
+
+bin/generate.py          # CLI 入口
+```
+
+### 设计
+
+- **提示词**：system.md（~100 行）运行时自动拼接 `schemas/README.md` 全文（IR 规范），总 system 约 6700 字符
+- **Few-shot**：2 对（user: 题目+解法 → assistant: IR JSON），覆盖 tree（节点高亮）和 array（指针移动）两个最核心模式
+- **API**：OpenAI 兼容协议，`https://token.sensenova.cn/v1/chat/completions`，模型 `sensenova-6.7-flash-lite`，temperature 0.3，max_tokens 8192
+- **JSON 提取**：直接 parse → code fence → first-{-to-last-} 三级 fallback
+- **校验 + 重试**：调用 `validate.validate_ir()`，失败 1 次则把错误消息喂回 LLM 重试
+- **输出**：保存 `.json` + 自动调用 `render.py` 生成 `.html`
+
+### CLI 用法
+
+```bash
+# 基本用法
+python bin/generate.py --problem "题目" --answer "解法" --out examples/foo
+
+# 从文件读取
+python bin/generate.py --problem-file p.txt --answer-file a.txt --out examples/foo
+
+# 强制指定基元
+python bin/generate.py --problem "..." --struct-type graph --out examples/foo
+
+# 只生成 IR 不渲染 HTML
+python bin/generate.py --problem "..." --dry-run --out examples/foo
+```
+
+### 两种使用方式
+
+1. **CLI 脚本**（`bin/generate.py`）：需要 `SENSENOVA_API_KEY` 环境变量，可脚本化批量调用
+2. **对话内置**（零配置）：直接在 TRAE 对话中贴题目，由当前 AI 读取 `prompts/system.md` + `schemas/README.md` 生成 IR，`validate.py` 校验通过后渲染。两种方式共用同一套提示词资产
+
+### 待验证
+
+- 需要拿到 API key 后实跑端到端流程
+- 验证 LLM 生成的 IR 是否能通过校验器（提示词中已列常见错误，但实际效果待测）
+- 如校验通过率低，考虑增加更多 few-shot 示例（timeline/graph/grid 各一个）

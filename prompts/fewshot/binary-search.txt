@@ -1,0 +1,11 @@
+题目：在升序有序表 [7, 13, 21, 34, 55, 89, 144] 中折半查找关键码 21，画出查找过程。mid = ⌊(low+high)/2⌋。
+
+解法：
+- 初始化：low=0, high=6，目标 21
+- 第 1 次：mid=3，比较 21 与 34，21 < 34，high=mid-1=2
+- 第 2 次：mid=1，比较 21 与 13，21 > 13，low=mid+1=2
+- 第 3 次：mid=2，21 == 21，查找成功
+
+IR JSON：
+
+{"schema_version":1,"struct_type":"array","meta":{"title":"折半查找：在有序表中查找 21","caption":"7 个元素的升序有序表，mid = ⌊(low+high)/2⌋"},"presets":[{"name":"查找 21","steps":[{"array":[7,13,21,34,55,89,144],"hl":[{"index":0,"kind":"visit"},{"index":1,"kind":"visit"},{"index":2,"kind":"visit"},{"index":3,"kind":"visit"},{"index":4,"kind":"visit"},{"index":5,"kind":"visit"},{"index":6,"kind":"visit"}],"ptrs":[{"name":"low","index":0},{"name":"high","index":6}],"title":"初始化","desc":"有序表升序排列，`low=0`，`high=6`，查找目标 21"},{"array":[7,13,21,34,55,89,144],"hl":[{"index":0,"kind":"visit"},{"index":1,"kind":"visit"},{"index":2,"kind":"visit"},{"index":3,"kind":"compare"},{"index":4,"kind":"visit"},{"index":5,"kind":"visit"},{"index":6,"kind":"visit"}],"ptrs":[{"name":"low","index":0},{"name":"mid","index":3},{"name":"high","index":6}],"title":"第 1 次比较","desc":"`mid = ⌊(0+6)/2⌋ = 3`，比较 21 与 34：21 < 34，`high = mid-1 = 2`"},{"array":[7,13,21,34,55,89,144],"hl":[{"index":0,"kind":"visit"},{"index":1,"kind":"compare"},{"index":2,"kind":"visit"}],"ptrs":[{"name":"low","index":0},{"name":"mid","index":1},{"name":"high","index":2}],"title":"第 2 次比较","desc":"`mid = ⌊(0+2)/2⌋ = 1`，比较 21 与 13：21 > 13，`low = mid+1 = 2`"},{"array":[7,13,21,34,55,89,144],"hl":[{"index":2,"kind":"found"}],"ptrs":[{"name":"low","index":2},{"name":"mid","index":2},{"name":"high","index":2}],"title":"查找成功","desc":"`mid = ⌊(2+2)/2⌋ = 2`，21 == 21，查找成功。共比较 3 次（ASL 分析中的典型路径）"}]}]}

@@ -102,7 +102,22 @@ bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一�
 - **确定性校验**：校验通过才能渲染，校验失败重试 1 次
 - **渲染器读 IR 决定画什么**；播放器（toolbar/字幕/主题同步）不读 IR
 
+## LLM 解析器
+
+`bin/generate.py` 接受题目 + 解法，调用 LLM 生成 IR，校验通过后自动渲染：
+
+```bash
+export SENSENOVA_API_KEY="your-key"
+python bin/generate.py --problem "向空 BST 依次插入 7,3,5,9" \
+  --answer "7 为根，3<7 左子，9>7 右子，5 在 3 右子" \
+  --out examples/bst-demo
+```
+
+提示词资产在 `prompts/`（system.md + few-shot），IR 规范在 `schemas/README.md`（运行时自动注入提示词）。
+
+也可以在 TRAE 对话中直接贴题目，由 AI 读取提示词资产生成 IR——两种方式共用同一套提示词。
+
 ## 路线图
 
-- v2：接 sensenova 的 LLM 解析器（输入题目+答案 → 生成 IR），确定性校验 + 重试
+- ~~v2：接 sensenova 的 LLM 解析器~~ ✅ 提示词 + CLI 脚本已完成，待 API key 实跑验证
 - v3：合并到 vitepress 仓库的 `feature/408-viz` 分支，与 `<VizEmbed>` 打通
