@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "struct_type": "mindmap",
+  "meta": {
+    "title": "TCP vs UDP 对比",
+    "caption": "传输层两大协议的核心差异"
+  },
+  "presets": [
+    {
+      "name": "TCP vs UDP",
+      "root": {
+        "id": "transport",
+        "label": "传输层",
+        "desc": "端到端通信",
+        "children": [
+          {
+            "id": "tcp",
+            "label": "TCP",
+            "desc": "面向连接、可靠传输",
+            "children": [
+              { "id": "conn", "label": "三次握手", "desc": "建立连接" },
+              { "id": "flow", "label": "流量控制", "desc": "滑动窗口" },
+              { "id": "cong", "label": "拥塞控制", "desc": "慢开始/拥塞避免" },
+              { "id": "rel", "label": "可靠传输", "desc": "序号+确认+重传" }
+            ]
+          },
+          {
+            "id": "udp",
+            "label": "UDP",
+            "desc": "无连接、不可靠",
+            "children": [
+              { "id": "fast", "label": "开销小", "desc": "8 字节头部" },
+              { "id": "nocomp", "label": "无拥塞控制", "desc": "不退让" },
+              { "id": "multicast", "label": "支持广播", "desc": "一对多" }
+            ]
+          },
+          {
+            "id": "compare",
+            "label": "关键对比",
+            "desc": "常考考点",
+            "children": [
+              { "id": "speed", "label": "速度", "desc": "UDP > TCP" },
+              { "id": "reliab", "label": "可靠性", "desc": "TCP > UDP" },
+              { "id": "conn_cmp", "label": "连接", "desc": "TCP 面向连接" }
+            ]
+          }
+        ]
+      },
+      "hl": [
+        { "node_id": "tcp", "kind": "concept" },
+        { "node_id": "udp", "kind": "contrast" }
+      ]
+    }
+  ]
+}

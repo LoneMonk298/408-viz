@@ -16,6 +16,7 @@
 | 图遍历/最短路/MST/拓扑 | `graph` | Dijkstra、Prim、BFS、DFS、Kruskal |
 | Cache/子网划分/加法器/页表 | `grid` | 直接/组相联映射、CIDR、行波进位 |
 | 状态机/TCP/计数器 | `fsm` | 有限状态机、TCP 连接状态、模 N 计数器 |
+| 概念关系/知识图谱/协议对比 | `mindmap` | 虚拟内存概念、TCP vs UDP、磁盘调度算法分类 |
 
 ## 核心规则
 

@@ -41,6 +41,7 @@
 | timeline | ✅ 已实现（SJF vs FCFS 进程调度甘特，含游标动画/进程分色） |
 | graph | ✅ 已实现（Dijkstra vs Prim，含 dist 徽章/松弛树边语义色） |
 | grid | ✅ 已实现（Cache 直接映射/子网划分，含 hit/miss/write/mask 语义色） |
+| mindmap | ✅ 已实现（虚拟内存知识图谱 + TCP vs UDP 对比，含径向布局/可折叠子树/碰撞检测/悬停 tooltip） |
 
 ---
 
@@ -243,6 +244,35 @@ renderer_template.html（通用播放器 + 按 struct_type 分发到具体渲染
 - 校验：cells/hl 的 r/c 必须在 0..rows/cols 范围内；同一 step 内不允许重复坐标；schema 见 `schemas/grid.schema.json`
 - 实现要点：`S.gridCells` 为 `r,c → val` 的 map（每步重建）；hit/miss/write 三种 kind 有脉冲光晕
 
+### mindmap（2026-09-10 新增）
+
+径向思维导图（概念/关系性题目，无步骤，可折叠交互）。`root` 树结构 + preset 级高亮：
+
+```json
+{
+  "presets": [{
+    "name": "虚拟内存",
+    "root": {
+      "id": "vm", "label": "虚拟内存", "desc": "扩大地址空间",
+      "children": [
+        { "id": "pt", "label": "页表", "desc": "虚拟→物理映射",
+          "children": [{ "id": "tlb", "label": "TLB", "desc": "加速地址转换" }] }
+      ]
+    },
+    "hl": [{ "node_id": "tlb", "kind": "concept" }]
+  }]
+}
+```
+
+- 高亮 kind：`concept`（概念，蓝色）/ `contrast`（对比，红色）
+- 布局：径向——根节点居中，子节点按角度均匀辐射；深度分层半径（d1=0.38R, d2=0.68R, d3+=R）
+- **碰撞检测**：8 轮迭代推开重叠节点（minDist = r1+r2+6），边界裁剪确保全部可见
+- **可折叠交互**：点击节点切换折叠/展开，右下角 +/− 徽章指示状态；`S.collapsed` 为 Set 存折叠节点 id
+- 悬停显示 desc tooltip（深色气泡）
+- 无步骤 → 隐藏播放控制（上一步/下一步/播放/速度滑块），仅保留预设下拉和重置
+- 校验：`_walk_mm` 递归检查 id 唯一性 + label 必填 + 深度 ≤5 + children ≤12；hl.node_id 必须在 root 树中
+- 实现要点：`loadPreset` 对 mindmap 使用伪步骤（`[{title: preset.name, desc: ''}]`），`applyStep` 读 `IR.presets[S.presetIdx].root`
+
 ---
 
 ## 四、通用播放器 UI 规范（与 viz-animation skill 对齐）
@@ -411,8 +441,9 @@ ssh hermes@192.168.0.1 'source /opt/ai-agent/workspace/.env && curl -sS https://
 6. ✅ 加 graph 渲染器（2026-09-09 完成：Dijkstra vs Prim，含 dist 徽章/松弛树边语义色/可选有向，见第三节 graph 规范）
 7. ✅ 加 grid 渲染器（2026-09-09 完成：Cache 直接映射 + 子网划分，含 hit/miss/write/mask 语义色，见第三节 grid 规范）
 8. ✅ 接 sensenova LLM 解析器（2026-09-10 完成：提示词资产 + CLI 脚本，见第十节）
-9. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
-10. **实跑测试**：拿到 API key 后用真题验证 generate.py 端到端流程
+9. ✅ 加 mindmap 渲染器（2026-09-10 完成：径向布局 + 可折叠子树 + 碰撞检测，见第三节 mindmap 规范）
+10. **集成到 VitePress 博客**（合并 feature/mvp 到 main，VizEmbed 支持新 struct_type）
+11. **实跑测试**：拿到 API key 后用真题验证 generate.py 端到端流程
 
 ### ⚠️ 教训：全量回归必须跑（2026-09-09 graph 轮发现）
 

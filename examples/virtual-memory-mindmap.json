@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "struct_type": "mindmap",
+  "meta": {
+    "title": "虚拟内存知识图谱",
+    "caption": "虚拟内存机制的核心概念与关系"
+  },
+  "presets": [
+    {
+      "name": "虚拟内存",
+      "root": {
+        "id": "vm",
+        "label": "虚拟内存",
+        "desc": "扩大地址空间",
+        "children": [
+          {
+            "id": "pt",
+            "label": "页表",
+            "desc": "虚拟→物理映射",
+            "children": [
+              { "id": "mpt", "label": "多级页表", "desc": "减少内存占用" },
+              { "id": "inv", "label": "倒置页表", "desc": "按物理页索引" },
+              {
+                "id": "tlb",
+                "label": "TLB",
+                "desc": "加速地址转换",
+                "children": [
+                  { "id": "hit", "label": "命中", "desc": "无需查页表" },
+                  { "id": "miss", "label": "缺失", "desc": "查页表后填入" }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "pf",
+            "label": "缺页中断",
+            "desc": "页面不在内存",
+            "children": [
+              { "id": "disk", "label": "磁盘调入", "desc": "从交换区读入" },
+              { "id": "rep", "label": "页面替换", "desc": "选择淘汰页" }
+            ]
+          },
+          {
+            "id": "rep_alg",
+            "label": "替换算法",
+            "desc": "LRU/FIFO/OPT",
+            "children": [
+              { "id": "lru", "label": "LRU", "desc": "最近最久未用" },
+              { "id": "fifo", "label": "FIFO", "desc": "先进先出" },
+              { "id": "opt", "label": "OPT", "desc": "最佳替换（理论）" },
+              { "id": "clock", "label": "Clock", "desc": "近似 LRU" }
+            ]
+          },
+          {
+            "id": "wp",
+            "label": "写回策略",
+            "desc": "脏页处理",
+            "children": [
+              { "id": "wb", "label": "写回", "desc": "推迟写磁盘" },
+              { "id": "wt", "label": "写直达", "desc": "同时写内存和磁盘" }
+            ]
+          }
+        ]
+      },
+      "hl": [
+        { "node_id": "tlb", "kind": "concept" },
+        { "node_id": "lru", "kind": "concept" }
+      ]
+    }
+  ]
+}

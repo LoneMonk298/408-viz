@@ -6,8 +6,8 @@
 
 | 模块 | 状态 |
 |---|---|
-| IR Schema (tree / fsm / array / timeline / graph / grid) | ✅ `schemas/*.schema.json` |
-| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠、graph 节点/边引用、grid 行列范围全检查） |
+| IR Schema (tree / fsm / array / timeline / graph / grid / mindmap) | ✅ `schemas/*.schema.json` |
+| 校验器 | ✅ `bin/validate.py`（树/hl 引用、fsm active/trans 引用、array 下标范围、timeline bar 重叠、graph 节点/边引用、grid 行列范围、mindmap 节点 id 唯一+深度限制全检查） |
 | 渲染器模板（通用播放器） | ✅ `bin/renderer_template.html`（toolbar/字幕/图例/主题同步/键盘快捷键） |
 | 渲染脚本 | ✅ `bin/render.py` |
 | tree 渲染器 | ✅ tidy 布局（叶子槽位+父居中+单子方向偏移）、半径/层级自适应、脉冲高亮 |
@@ -16,7 +16,9 @@
 | timeline 渲染器 | ✅ 甘特横道、时间游标动画、进程分色、到达标记、active 半透明全长预览 |
 | graph 渲染器 | ✅ 显式/圆形布局、带权边、dist 数值徽章、松弛/树边语义色、可选有向 |
 | grid 渲染器 | ✅ 行列网格、行列标题、单元格值快照、hit/miss/compare/write/mask 语义色 |
-| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling`、`dijkstra-prim`、`cache-direct-mapped`、`subnet-division` |
+| mindmap 渲染器 | ✅ 径向布局、可折叠子树（点击节点 +/− 徽章）、碰撞检测防重叠、悬停 desc tooltip |
+| LLM 解析器 | ✅ `bin/generate.py` + `prompts/`（提示词资产 + CLI 脚本，待 API key 实跑） |
+| 示例 | ✅ `bst-insert`、`counter-2bit`、`binary-search`、`bubble-sort`、`sjf-scheduling`、`dijkstra-prim`、`cache-direct-mapped`、`subnet-division`、`virtual-memory-mindmap`、`tcp-udp-mindmap` |
 
 ## 快速开始
 
@@ -35,7 +37,7 @@ python3 bin/build_all.py
 
 ## IR 设计
 
-六种 `struct_type`：
+七种 `struct_type`：
 
 **tree** —— 每步是完整树快照 + 高亮。`children` 位置 0=左子、1=右子，单右子用 `null` 占位
 ```json
@@ -91,6 +93,21 @@ bar kind ∈ `run/io/idle`（run 按进程 label 自动分色，跨 preset 一�
     }] }] }
 ```
 高亮 kind：`hit`（命中）/ `miss`（缺失）/ `compare`（比较）/ `write`（写入/装入）/ `found`（查找命中）/ `mask`（掩码位）。
+
+**mindmap** —— 径向思维导图（概念/关系性题目，无步骤，可折叠交互）
+```json
+{ "presets": [{
+    "root": {
+      "id": "vm", "label": "虚拟内存", "desc": "扩大地址空间",
+      "children": [
+        { "id": "pt", "label": "页表", "desc": "虚拟→物理映射",
+          "children": [{ "id": "tlb", "label": "TLB", "desc": "加速地址转换" }] }
+      ]
+    },
+    "hl": [{ "node_id": "tlb", "kind": "concept" }]
+  }] }
+```
+高亮 kind：`concept`（概念）/ `contrast`（对比）。点击节点右下角 +/− 徽章折叠/展开子树，悬停显示 desc。
 
 详见 `schemas/README.md`。
 

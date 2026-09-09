@@ -14,6 +14,7 @@ FSM_TYPES = {'start', 'active', 'success', 'failure', 'terminal'}
 GRAPH_NODE_KINDS = {'visit', 'frontier', 'done', 'path', 'found'}
 GRAPH_EDGE_KINDS = {'relax', 'tree', 'path'}
 GRID_HL_KINDS = {'hit', 'miss', 'compare', 'write', 'found', 'mask'}
+MINDMAP_HL_KINDS = {'concept', 'contrast'}
 
 
 def _walk_tree_ids(node, acc):
@@ -29,7 +30,7 @@ def _walk_tree_ids(node, acc):
 
 def validate_ir(data):
     assert data.get('schema_version') == 1, 'schema_version must be 1'
-    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline', 'graph', 'grid'), f"unknown struct_type: {data.get('struct_type')}"
+    assert data.get('struct_type') in ('tree', 'fsm', 'array', 'timeline', 'graph', 'grid', 'mindmap'), f"unknown struct_type: {data.get('struct_type')}"
     assert data.get('meta', {}).get('title'), 'meta.title required'
     assert data.get('presets'), 'presets required'
     t = data['struct_type']
@@ -186,6 +187,27 @@ def validate_ir(data):
                     assert isinstance(h['c'], int) and 0 <= h['c'] < cols, \
                         f"hl c={h['c']} out of range (preset {pi} step {si})"
                     assert h['kind'] in GRID_HL_KINDS, f"hl.kind '{h['kind']}' invalid"
+    elif t == 'mindmap':
+        def _walk_mm(node, all_ids, depth=0):
+            assert depth <= 5, f"mindmap depth > 5 at node {node.get('id')}"
+            assert node.get('id'), 'mindmap node.id required'
+            assert node['id'] not in all_ids, f"duplicate node id '{node['id']}'"
+            all_ids.add(node['id'])
+            assert node.get('label'), f"mindmap node '{node['id']}' label required"
+            children = node.get('children') or []
+            assert len(children) <= 12, f"node '{node['id']}' has > 12 children"
+            for c in children:
+                if c is not None:
+                    _walk_mm(c, all_ids, depth + 1)
+        for pi, p in enumerate(data['presets']):
+            assert p.get('name'), f'preset[{pi}].name required'
+            assert p.get('root'), f'preset[{pi}].root required'
+            all_ids = set()
+            _walk_mm(p['root'], all_ids)
+            for h in p.get('hl', []):
+                assert h['node_id'] in all_ids, \
+                    f"hl.node_id '{h['node_id']}' not in mindmap (preset {pi})"
+                assert h['kind'] in MINDMAP_HL_KINDS, f"hl.kind '{h['kind']}' invalid"
     elif t == 'fsm':
         state_ids = {s['id'] for s in data['states']}
         trans_ids = {tr['id'] for tr in data['transitions'] if tr.get('id')}

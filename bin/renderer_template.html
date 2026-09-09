@@ -281,6 +281,8 @@ const HL_COLORS = {
   miss:      { fill: '#fa5252', stroke: '#e03131', fillSoft: 'rgba(250,82,82,0.20)' },
   write:     { fill: '#9c36b5', stroke: '#9c36b5', fillSoft: 'rgba(156,54,181,0.18)' },
   mask:      { fill: '#1971c2', stroke: '#1971c2', fillSoft: 'rgba(25,113,194,0.22)' },
+  concept:   { fill: '#228be6', stroke: '#1c7ed6', fillSoft: 'rgba(34,139,230,0.15)' },
+  contrast:  { fill: '#fa5252', stroke: '#e03131', fillSoft: 'rgba(250,82,82,0.15)' },
 };
 const LEGEND = {
   insert:    '新插入',
@@ -306,6 +308,8 @@ const LEGEND = {
   miss:      '缺失',
   write:     '写入',
   mask:      '掩码',
+  concept:   '概念',
+  contrast:  '对比',
 };
 
 // ===== 状态 =====
@@ -340,7 +344,7 @@ function resizeCanvas() {
   canvas.width = Math.max(1, Math.floor(r.width * dpr));
   canvas.height = Math.max(1, Math.floor(r.height * dpr));
 }
-window.addEventListener('resize', () => { resizeCanvas(); draw(0); });
+window.addEventListener('resize', () => { resizeCanvas(); if (IR.struct_type === 'mindmap' && S.currentStep >= 0) applyStep(S.currentStep); else draw(0); });
 
 // ===== 布局：树（tidy 布局：叶子占单位槽位，内部节点取子节点范围中点，整体居中）=====
 function computeTreeLayout(root, w, h) {
@@ -543,6 +547,106 @@ function computeGridLayout(rows, cols, rowLabels, colLabels, w, h) {
            colLabels: colLabels || [], rowLabels: rowLabels || [] };
 }
 
+// ===== 布局：径向思维导图（中心根节点，分支向外辐射，可折叠子树）=====
+function computeMindmapLayout(root, w, h, collapsed) {
+  const cx = w / 2, cy = h / 2;
+  const maxR = Math.min(w, h) / 2 - 50;
+  const nodes = [];
+
+  // 先收集所有可见节点（树遍历，尊重折叠）
+  function collectVisible(node, depth, angle, spread) {
+    if (!node) return [];
+    const isCollapsed = collapsed.has(node.id);
+    const result = [{ node, depth, angle, spread, collapsed: isCollapsed,
+                      hasChildren: !!(node.children && node.children.length) }];
+    if (isCollapsed || !node.children) return result;
+    const children = node.children.filter(c => c != null);
+    if (!children.length) return result;
+
+    let childSpread;
+    if (depth === 0) {
+      childSpread = Math.PI * 2;
+      const startAngle = -Math.PI / 2;
+      children.forEach((child, i) => {
+        const ca = startAngle + (i + 0.5) * (childSpread / children.length);
+        result.push(...collectVisible(child, depth + 1, ca, childSpread / children.length));
+      });
+    } else {
+      childSpread = Math.min(spread * 1.5, Math.PI * 0.7);
+      const startAngle = angle - childSpread / 2;
+      children.forEach((child, i) => {
+        const ca = startAngle + (i + 0.5) * (childSpread / Math.max(children.length, 1));
+        result.push(...collectVisible(child, depth + 1, ca, childSpread / Math.max(children.length, 1)));
+      });
+    }
+    return result;
+  }
+
+  const visible = collectVisible(root, 0, -Math.PI / 2, Math.PI * 2);
+
+  // 计算最大深度
+  const maxDepth = Math.max(...visible.map(v => v.depth), 1);
+
+  // 半径分层：depth 1 = 0.35*maxR, depth 2 = 0.65*maxR, depth 3+ = maxR
+  const depthRadii = {};
+  for (let d = 1; d <= maxDepth; d++) {
+    if (d === 1) depthRadii[d] = maxR * 0.38;
+    else if (d === 2) depthRadii[d] = maxR * 0.68;
+    else depthRadii[d] = maxR;
+  }
+
+  // 布局节点
+  visible.forEach(v => {
+    const labelLen = (v.node.label || '').length;
+    const r = v.depth === 0 ? 28 : Math.max(16, Math.min(22, 12 + labelLen * 1.4));
+    const radius = v.depth === 0 ? 0 : depthRadii[v.depth] || maxR;
+    const x = cx + (v.depth === 0 ? 0 : radius * Math.cos(v.angle));
+    const y = cy + (v.depth === 0 ? 0 : radius * Math.sin(v.angle));
+    nodes.push({
+      id: v.node.id, label: v.node.label || '', desc: v.node.desc || '',
+      x, y, depth: v.depth, r, angle: v.angle,
+      collapsed: v.collapsed, hasChildren: v.hasChildren,
+    });
+  });
+
+  // 碰撞检测：同层或相邻层节点过近时沿径向推开
+  for (let iter = 0; iter < 8; iter++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        if (a.depth === 0 || b.depth === 0) continue;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = a.r + b.r + 6;
+        if (dist < minDist && dist > 0.01) {
+          const push = (minDist - dist) / 2;
+          const ux = dx / dist, uy = dy / dist;
+          // 不推根节点
+          a.x += ux * push; a.y += uy * push;
+          b.x -= ux * push; b.y -= uy * push;
+          moved = true;
+        } else if (dist < 0.01) {
+          // 完全重叠：随机推开
+          a.x += (Math.random() - 0.5) * 4;
+          a.y += (Math.random() - 0.5) * 4;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // 边界裁剪：确保节点在画布内
+  const padX = 20, padTop = 50, padBot = 60;
+  for (const n of nodes) {
+    n.x = clamp(n.x, n.r + padX, w - n.r - padX);
+    n.y = clamp(n.y, n.r + padTop, h - n.r - padBot);
+  }
+
+  return { nodes, cx, cy };
+}
+
 // ===== 应用步骤 =====
 function applyStep(idx) {
   if (idx < 0 || idx >= S.steps.length) return;
@@ -672,6 +776,33 @@ function applyStep(idx) {
     (st.cells || []).forEach(c => { S.gridCells[c.r + ',' + c.c] = String(c.val); });
     S.hl = {};
     (st.hl || []).forEach(h => { S.hl[h.r + ',' + h.c] = h.kind; });
+  } else if (IR.struct_type === 'mindmap') {
+    const r = canvas.getBoundingClientRect();
+    if (!S.collapsed) S.collapsed = new Set();
+    const preset = IR.presets[S.presetIdx];
+    const root = preset.root;
+    const lay = computeMindmapLayout(root, r.width, r.height, S.collapsed);
+    S.layout = lay;
+    S.mindmapRoot = root;
+    // 初始化 display
+    lay.nodes.forEach(n => {
+      const d = S.display[n.id];
+      if (d) {
+        d.tx = n.x; d.ty = n.y; d.ta = 1; d.tr = n.r;
+      } else {
+        S.display[n.id] = {
+          x: n.x, y: n.y, a: 0, tx: n.x, ty: n.y, ta: 1,
+          r: n.r, tr: n.r,
+        };
+      }
+    });
+    // 移除不在布局中的节点（折叠后消失的）
+    const liveIds = new Set(lay.nodes.map(n => n.id));
+    for (const id in S.display) {
+      if (!liveIds.has(id)) S.display[id].ta = 0;
+    }
+    S.hl = {};
+    (preset.hl || []).forEach(h => { S.hl[h.node_id] = h.kind; });
   }
 }
 
@@ -698,6 +829,7 @@ function draw(ts) {
   else if (IR.struct_type === 'timeline') drawTimeline(ts);
   else if (IR.struct_type === 'graph') drawGraph(ts);
   else if (IR.struct_type === 'grid') drawGrid(ts);
+  else if (IR.struct_type === 'mindmap') drawMindmap(ts);
 }
 
 // ===== 树渲染 =====
@@ -1312,6 +1444,171 @@ function drawGrid(ts) {
   }
 }
 
+// ===== 思维导图渲染 =====
+function drawMindmap(ts) {
+  const dark = isDark();
+  const textColor = dark ? '#e9ecef' : '#343a40';
+  const dimColor = dark ? '#868e96' : '#adb5bd';
+  const lineColor = dark ? '#3a3d44' : '#ced4da';
+  const lay = S.layout;
+  if (!lay) return;
+
+  const nodeMap = {};
+  lay.nodes.forEach(n => { nodeMap[n.id] = n; });
+
+  // 构建父子边列表
+  const edges = [];
+  function collectEdges(node, parentId) {
+    if (!node) return;
+    if (parentId && nodeMap[node.id] && nodeMap[parentId]) {
+      edges.push({ from: parentId, to: node.id });
+    }
+    if (S.collapsed && S.collapsed.has(node.id)) return;
+    if (node.children) {
+      node.children.filter(c => c != null).forEach(c => collectEdges(c, node.id));
+    }
+  }
+  if (S.mindmapRoot) collectEdges(S.mindmapRoot, null);
+
+  // 画边（贝塞尔曲线）
+  edges.forEach(e => {
+    const from = S.display[e.from], to = S.display[e.to];
+    if (!from || !to) return;
+    const fa = from.a !== undefined ? from.a : 1;
+    const ta = to.a !== undefined ? to.a : 1;
+    const alpha = Math.min(fa, ta);
+    if (alpha < 0.05) return;
+    const fn = nodeMap[e.from], tn = nodeMap[e.to];
+    const fx = from.x, fy = from.y;
+    const tx = to.x, ty = to.y;
+    // 控制点：沿父→子方向偏移
+    const mx = (fx + tx) / 2, my = (fy + ty) / 2;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = fn && fn.depth === 0 ? 2 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.quadraticCurveTo(mx, my, tx, ty);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // 画节点
+  lay.nodes.forEach(n => {
+    const d = S.display[n.id];
+    if (!d) return;
+    const a = d.a !== undefined ? d.a : 1;
+    if (a < 0.03) return;
+
+    const kind = S.hl[n.id];
+    let fill, stroke, lw;
+    if (n.depth === 0) {
+      fill = dark ? '#2f9e44' : '#2f9e44';
+      stroke = dark ? '#2b8a3e' : '#2b8a3e';
+      lw = 3;
+    } else if (kind && HL_COLORS[kind]) {
+      fill = HL_COLORS[kind].fillSoft;
+      stroke = HL_COLORS[kind].stroke;
+      lw = 2;
+    } else {
+      const colors = dark
+        ? ['#1e3a5f', '#3b1e5f', '#5f1e3b', '#1e5f3b', '#5f3b1e', '#3b5f1e']
+        : ['#e7f5ff', '#f3e8ff', '#ffe0f0', '#e8f5e9', '#fff4e6', '#f0f7ff'];
+      const strokes = dark
+        ? ['#1971c2', '#9c36b5', '#c2255c', '#2f9e44', '#e8590c', '#1971c2']
+        : ['#1971c2', '#9c36b5', '#c2255c', '#2b8a3e', '#e8590c', '#1c7ed6'];
+      const ci = n.depth > 0 ? (n.depth - 1) % 6 : 0;
+      fill = colors[ci];
+      stroke = strokes[ci];
+      lw = 1.5;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    // 阴影
+    if (n.depth === 0) {
+      ctx.shadowColor = 'rgba(47,158,68,0.4)';
+      ctx.shadowBlur = 12;
+    }
+
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+
+    // 折叠指示器（+/- 号）放在节点右下角
+    if (n.hasChildren) {
+      ctx.shadowBlur = 0;
+      const bx = d.x + d.r * 0.65, by = d.y + d.r * 0.65;
+      const badge = 7;
+      ctx.fillStyle = n.collapsed ? stroke : (dark ? '#5c5f66' : '#adb5bd');
+      ctx.beginPath();
+      ctx.arc(bx, by, badge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = dark ? '#2a2a2e' : '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // +/- 符号
+      ctx.strokeStyle = dark ? '#e9ecef' : '#fff';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(bx - 3, by);
+      ctx.lineTo(bx + 3, by);
+      if (n.collapsed) {
+        ctx.moveTo(bx, by - 3);
+        ctx.lineTo(bx, by + 3);
+      }
+      ctx.stroke();
+    }
+
+    ctx.shadowBlur = 0;
+
+    // 标签
+    ctx.fillStyle = n.depth === 0 ? '#fff' : textColor;
+    ctx.font = (n.depth === 0 ? '700 13px' : '600 12px') + ' -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, d.x, d.y);
+
+    // desc（子节点显示在下方）
+    if (n.desc && n.depth > 0 && !n.collapsed) {
+      ctx.fillStyle = dimColor;
+      ctx.font = '400 10px -apple-system, sans-serif';
+      ctx.fillText(n.desc, d.x, d.y + d.r + 12);
+    }
+
+    ctx.restore();
+  });
+
+  // 悬停 tooltip
+  if (S.hoverNode && S.hoverNode.desc) {
+    const n = S.hoverNode;
+    const d = S.display[n.id];
+    if (d) {
+      const text = n.desc;
+      ctx.save();
+      ctx.font = '400 12px -apple-system, sans-serif';
+      const tw = ctx.measureText(text).width + 20;
+      const th = 28;
+      let bx = d.x - tw / 2, by = d.y - d.r - th - 8;
+      if (by < 10) by = d.y + d.r + 8;
+      ctx.fillStyle = dark ? '#2a2a2e' : '#333';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, tw, th, 6);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, bx + tw / 2, by + th / 2);
+      ctx.restore();
+    }
+  }
+}
+
 // ===== 图例 =====
 const LEGEND_KINDS = {
   tree: ['insert', 'visit', 'compare', 'unbalanced', 'rotated', 'removed'],
@@ -1320,6 +1617,7 @@ const LEGEND_KINDS = {
   timeline: ['run', 'io', 'idle', 'active'],
   graph: ['visit', 'frontier', 'done', 'path', 'tree', 'relax'],
   grid: ['hit', 'miss', 'compare', 'write', 'found', 'mask'],
+  mindmap: ['concept', 'contrast'],
 };
 function renderLegend() {
   const legend = $('legend');
@@ -1369,12 +1667,27 @@ function stepTo(idx) {
 function loadPreset(idx) {
   pause();
   S.presetIdx = idx;
-  S.steps = IR.presets[idx].steps;
+  const preset = IR.presets[idx];
+  if (IR.struct_type === 'mindmap') {
+    // 思维导图没有步骤，使用伪步骤
+    S.steps = [{ title: preset.name || IR.meta.title, desc: '' }];
+  } else {
+    S.steps = preset.steps;
+  }
   S.currentStep = -1;
   S.display = {};
   S.nowT = null;
+  if (IR.struct_type === 'mindmap') S.collapsed = new Set();
   const sel = $('presetSelect');
   if (sel && parseInt(sel.value, 10) !== idx) sel.value = String(idx);
+  // 思维导图隐藏步骤导航
+  if (IR.struct_type === 'mindmap') {
+    $('prevBtn').style.display = 'none';
+    $('nextBtn').style.display = 'none';
+    $('playBtn').style.display = 'none';
+    $('overlayNum').style.display = 'none';
+    $('speedSlider').parentElement.style.display = 'none';
+  }
   applyStep(0);
 }
 
@@ -1419,6 +1732,43 @@ function init() {
   renderLegend();
   // 画布
   resizeCanvas();
+  // 思维导图：点击节点折叠/展开
+  if (IR.struct_type === 'mindmap') {
+    canvas.style.cursor = 'pointer';
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      if (!S.layout) return;
+      for (const n of S.layout.nodes) {
+        const d = S.display[n.id];
+        if (!d) continue;
+        const dx = x - d.x, dy = y - d.y;
+        if (dx*dx + dy*dy <= (d.r + 4) * (d.r + 4)) {
+          if (n.hasChildren) {
+            if (S.collapsed.has(n.id)) S.collapsed.delete(n.id);
+            else S.collapsed.add(n.id);
+            applyStep(S.currentStep);
+          }
+          return;
+        }
+      }
+    });
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left, y = e.clientY - rect.top;
+      let found = null;
+      if (S.layout) {
+        for (const n of S.layout.nodes) {
+          const d = S.display[n.id];
+          if (!d) continue;
+          const dx = x - d.x, dy = y - d.y;
+          if (dx*dx + dy*dy <= (d.r + 4) * (d.r + 4)) { found = n; break; }
+        }
+      }
+      S.hoverNode = found;
+      canvas.style.cursor = found && found.hasChildren ? 'pointer' : (found ? 'help' : 'default');
+    });
+  }
   // 选预设
   const pIdx = (params.preset != null && params.preset >= 0 && params.preset < IR.presets.length)
     ? params.preset : 0;

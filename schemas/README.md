@@ -5,7 +5,7 @@
 ```json
 {
   "schema_version": 1,
-  "struct_type": "tree | fsm | array | timeline | graph | grid",
+  "struct_type": "tree | fsm | array | timeline | graph | grid | mindmap",
   "meta": { "title": "...", "caption": "..." },
   "presets": [{ "name": "...", "steps": [...] }]
 }
@@ -160,9 +160,43 @@
 - `hl`：单元格高亮，kind ∈ `hit`（命中，绿色脉冲）/ `miss`（缺失，红色脉冲）/ `compare`（比较，蓝色）/ `write`（写入/装入，紫色脉冲）/ `found`（查找命中，绿色）/ `mask`（掩码位，蓝色）
 - 适用场景：Cache 行×（Valid|Tag|Data）表、IP 地址位分解、加法器进位链、页表映射
 
+## mindmap
+
+径向思维导图（概念/关系性题目，如"虚拟内存涉及哪些概念"、"TCP vs UDP 对比"）。**无步骤**——预设包含一个 `root` 树结构 + 可选高亮。
+
+```json
+{
+  "presets": [{
+    "name": "虚拟内存",
+    "root": {
+      "id": "vm", "label": "虚拟内存", "desc": "扩大地址空间",
+      "children": [
+        { "id": "pt", "label": "页表", "desc": "虚拟→物理映射",
+          "children": [
+            { "id": "mpt", "label": "多级页表", "desc": "减少内存占用" },
+            { "id": "tlb", "label": "TLB", "desc": "加速地址转换" }
+          ]
+        },
+        { "id": "pf", "label": "缺页中断", "desc": "页面不在内存" }
+      ]
+    },
+    "hl": [
+      { "node_id": "tlb", "kind": "concept" }
+    ]
+  }]
+}
+```
+
+- `root`：树结构，与 tree 基元的 node 结构一致（id/label/desc/children），但不区分左右子
+- `children`：可选，最多 12 个子节点，支持 `null` 占位（与 tree 一致），最大深度 5
+- `hl`：preset 级高亮（非 step 级），kind ∈ `concept`（概念，蓝色）/ `contrast`（对比，红色）
+- 交互：点击节点右下角 +/− 徽章折叠/展开子树；悬停显示 desc tooltip
+- 布局：径向——根节点居中，子节点按角度均匀辐射；碰撞检测自动推开重叠节点；边界裁剪确保全部可见
+- 适用场景：知识体系图谱、协议对比、算法分类树、概念关系图
+
 ## 校验规则（validate.py）
 
 - 未知字段拒收（schema 层 `additionalProperties: false`，校验器同步检查）
-- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中；graph 的 `from/to`/`hl.node_id`/`vals.node_id` 必须在 nodes 中、`edge_hl.edge_id` 必须在 edges 中；grid 的 `cells.r/c` 和 `hl.r/c` 必须在 0..rows/cols 范围内
+- 引用完整性：tree 的 `hl.node_id` 必须在树中；fsm 的 `from/to` 必须在 states 中、`lastTrans` 必须在 transitions 中；array 的 `hl.index` / `ptrs.index` 必须在数组下标范围内；timeline 的 `bar.row` 必须在 rows 中、`active` 必须在 bars 中；graph 的 `from/to`/`hl.node_id`/`vals.node_id` 必须在 nodes 中、`edge_hl.edge_id` 必须在 edges 中；grid 的 `cells.r/c` 和 `hl.r/c` 必须在 0..rows/cols 范围内；mindmap 的 `hl.node_id` 必须在 root 树中
 - 时序合法性（timeline）：同一行内 bars 不得重叠；`reveal` / `markers.t` 必须在 0..该 preset 最大 end 范围内
-- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，graph nodes 2-12 / edges 1-30，grid rows/cols 1-12，presets 1-12，steps ≤ 80
+- 数量限制：array 元素 1-20，timeline bars 1-30 / rows 1-4，graph nodes 2-12 / edges 1-30，grid rows/cols 1-12，mindmap 深度 ≤5 / children ≤12 / presets 1-6，presets 1-12，steps ≤ 80
