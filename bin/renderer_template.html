@@ -307,9 +307,12 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', () => { resizeCanvas(); draw(0); });
 
-// ===== 布局：树 =====
+// ===== 布局：树（中序遍历 → 均匀槽位 → 画布居中）=====
 function computeTreeLayout(root, w, h) {
-  if (!root) return { nodes: [], rootX: w/2, rootY: 60, gapX: 80, r: 16 };
+  if (!root) return { nodes: [], r: 16 };
+  const insetL = 60, insetR = 60, topPad = 70, bottomPad = 100;
+  const availW = Math.max(100, w - insetL - insetR);
+  const availH = Math.max(120, h - topPad - bottomPad);
   // 中序遍历
   const ordered = [];
   (function inorder(n) {
@@ -319,11 +322,15 @@ function computeTreeLayout(root, w, h) {
     inorder(n.children && n.children[1]);
   })(root);
   const n = ordered.length || 1;
-  const gapX = clamp(w / (n + 1), 40, 110);
-  const r = clamp(gapX * 0.32, 12, 22);
-  // 中序 x 坐标
+  const gapX = n <= 1 ? 0 : availW / (n - 1);
+  const r = clamp(gapX * 0.28, 14, 22);
+  // x：n=1 时居中；n>1 时首节点在 insetL，末节点在 insetL+availW
   const inorderX = {};
-  ordered.forEach((node, i) => { inorderX[node.id] = (i + 1) * gapX; });
+  ordered.forEach((node, i) => {
+    inorderX[node.id] = n === 1
+      ? insetL + availW / 2
+      : insetL + i * gapX;
+  });
   // 深度
   const depth = {};
   (function walk(n, d) {
@@ -331,18 +338,14 @@ function computeTreeLayout(root, w, h) {
     depth[n.id] = d;
     (n.children || []).forEach(c => walk(c, d + 1));
   })(root, 0);
-  // y 坐标：等层距
   const maxDepth = Object.values(depth).reduce((a, b) => Math.max(a, b), 0) || 1;
-  const topPad = 70;
-  const bottomPad = 90;
-  const layerGap = clamp((h - topPad - bottomPad) / Math.max(1, maxDepth), 50, 110);
+  const layerGap = maxDepth === 0 ? 0 : availH / maxDepth;
   // 收集节点
   const nodes = [];
   (function collect(n) {
     if (!n) return;
     nodes.push({
-      id: n.id,
-      val: n.val,
+      id: n.id, val: n.val,
       x: inorderX[n.id],
       y: topPad + depth[n.id] * layerGap,
       r: r,
@@ -353,29 +356,38 @@ function computeTreeLayout(root, w, h) {
   return { nodes, layerGap, r };
 }
 
-// ===== 布局：FSM =====
+// ===== 布局：FSM（col 决定列，列内均匀分布，整组在可用区域居中）=====
 function computeFSMLayout(states, w, h) {
+  const insetL = 80, insetR = 80, topPad = 60, bottomPad = 100;
+  const availW = Math.max(120, w - insetL - insetR);
+  const availH = Math.max(160, h - topPad - bottomPad);
   const cols = {};
   states.forEach(s => { (cols[s.col] = cols[s.col] || []).push(s); });
-  const colCount = Math.max(...Object.keys(cols).map(Number)) + 1;
-  const colW = w / Math.max(1, colCount);
-  const rowGap = clamp(h / 3, 100, 160);
-  const topPad = 80;
+  const colKeys = Object.keys(cols).map(Number).sort((a, b) => a - b);
+  const colCount = colKeys.length;
+  const r = 34;
+  // 可用区域在垂直方向进一步收缩 r + 12（给 sublabel 留位）
+  const effTop = topPad + r + 12;
+  const effBottom = h - bottomPad;
   const nodes = [];
-  Object.keys(cols).forEach(col => {
-    cols[col].forEach((s, row) => {
+  colKeys.forEach((col, i) => {
+    const xs = colCount === 1
+      ? insetL + availW / 2
+      : insetL + availW * (i / (colCount - 1));
+    const items = cols[col];
+    const itemGap = items.length === 1 ? 0 : (effBottom - effTop) / (items.length - 1);
+    items.forEach((s, row) => {
       nodes.push({
-        id: s.id,
-        type: s.type,
-        label: s.label,
-        sublabel: s.sublabel,
-        x: col * colW + colW/2,
-        y: topPad + row * rowGap + rowGap/2,
-        r: 34,
+        id: s.id, type: s.type, label: s.label, sublabel: s.sublabel,
+        x: xs,
+        y: items.length === 1
+          ? (effTop + effBottom) / 2
+          : effTop + row * itemGap,
+        r: r,
       });
     });
   });
-  return { nodes, colW };
+  return { nodes, r };
 }
 
 // ===== 应用步骤 =====
